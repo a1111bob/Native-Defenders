@@ -1,0 +1,2633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Native Defenders: The Invasion</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f3f4f6;
+            margin: 0;
+            overflow: hidden;
+            touch-action: none; 
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #000;
+        }
+        /* Atmospheric Vignette Overlay */
+        .vignette {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            box-shadow: inset 0 0 150px rgba(0,0,0,0.8);
+            pointer-events: none;
+            z-index: 5;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+        }
+        .pointer-events-auto {
+            pointer-events: auto;
+        }
+        
+        /* Mobile Controls */
+        #mobile-controls {
+            display: none;
+            position: absolute;
+            bottom: 30px;
+            left: 0;
+            width: 100%;
+            padding: 0 30px;
+            box-sizing: border-box;
+            justify-content: space-between;
+            align-items: flex-end;
+            pointer-events: none;
+            z-index: 15;
+        }
+        @media (hover: none) and (pointer: coarse) {
+            #mobile-controls {
+                display: flex;
+            }
+        }
+        .joystick-base {
+            width: 150px;
+            height: 150px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            position: relative;
+            pointer-events: auto;
+            backdrop-filter: blur(4px);
+        }
+        .joystick-stick {
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .action-btn {
+            width: 110px;
+            height: 110px;
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.7), rgba(185, 28, 28, 0.9));
+            border: 2px solid rgba(252, 165, 165, 0.5);
+            border-radius: 50%;
+            pointer-events: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 800;
+            font-size: 1.1rem;
+            color: white;
+            user-select: none;
+            box-shadow: 0 4px 15px rgba(220, 38, 38, 0.5);
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            transition: transform 0.1s;
+        }
+        .action-btn:active {
+            transform: scale(0.9);
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.8), rgba(153, 27, 27, 0.9));
+        }
+
+        /* Custom Scrollbar for level select */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.5); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(156, 163, 175, 0.8); }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(234, 179, 8, 0.4); }
+            50% { box-shadow: 0 0 25px rgba(234, 179, 8, 0.8); }
+        }
+        .powerup-active {
+            animation: pulse-glow 1s infinite;
+            border-color: #eab308 !important;
+        }
+        
+        .powerup-text-frenzy { background-color: rgba(234, 179, 8, 0.2); color: #fde047; }
+        .powerup-text-shield { background-color: rgba(6, 182, 212, 0.2); color: #67e8f9; }
+        .powerup-text-speed { background-color: rgba(74, 222, 128, 0.2); color: #86efac; }
+        .powerup-text-nuke { background-color: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+        .powerup-text-magnet { background-color: rgba(168, 85, 247, 0.2); color: #d8b4fe; }
+        .powerup-text-freeze { background-color: rgba(147, 197, 253, 0.2); color: #bfdbfe; }
+        .powerup-text-clone { background-color: rgba(244, 114, 182, 0.2); color: #fbcfe8; }
+        .powerup-text-invincible { background-color: rgba(255, 255, 255, 0.2); color: #ffffff; text-shadow: 0 0 5px #fff; }
+        .powerup-text-feast { background-color: rgba(21, 128, 61, 0.2); color: #86efac; }
+        .powerup-text-repel { background-color: rgba(249, 115, 22, 0.2); color: #fdba74; }
+        .powerup-text-pierce { background-color: rgba(99, 102, 241, 0.2); color: #818cf8; }
+        .powerup-text-camo { background-color: rgba(156, 163, 175, 0.2); color: #d1d5db; }
+        .powerup-text-decoy { background-color: rgba(161, 98, 7, 0.2); color: #ca8a04; }
+        .powerup-text-poison { background-color: rgba(132, 204, 22, 0.2); color: #a3e635; }
+        .powerup-text-turret { background-color: rgba(217, 70, 239, 0.2); color: #e879f9; }
+        .powerup-text-jackpot { background-color: rgba(250, 204, 21, 0.2); color: #fde047; }
+        .powerup-text-explosive { background-color: rgba(225, 29, 72, 0.2); color: #fb7185; }
+        .powerup-text-babyshield { background-color: rgba(125, 211, 252, 0.2); color: #bae6fd; }
+        .powerup-text-vortex { background-color: rgba(88, 28, 135, 0.2); color: #c084fc; }
+        .powerup-text-shrink { background-color: rgba(20, 184, 166, 0.2); color: #5eead4; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <canvas id="bgCanvas" style="display:none;"></canvas>
+        <div class="vignette"></div>
+
+        <div class="ui-layer">
+            <!-- Start Screen / Level Select -->
+            <div id="start-screen" class="pointer-events-auto absolute inset-0 flex flex-col items-center justify-start pt-24 pb-12 bg-slate-950/95 backdrop-blur-2xl z-40 overflow-y-auto">
+                <!-- NEW: Top Bar (Coins & Shop) -->
+                <div class="fixed top-4 left-4 right-4 flex justify-between items-center z-50">
+                    <div class="glass-panel px-4 py-2 rounded-full flex items-center gap-2">
+                        <span class="text-yellow-400 font-bold text-lg text-shadow">🪙 <span id="coin-display">0</span></span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="btn-open-quests" class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold py-2 px-4 md:px-6 rounded-full transition-transform transform hover:scale-105 shadow-lg border border-amber-400/30 text-sm md:text-base">
+                            Quests
+                        </button>
+                        <button id="btn-open-instructions" class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold py-2 px-4 md:px-6 rounded-full transition-transform transform hover:scale-105 shadow-lg border border-emerald-400/30 text-sm md:text-base">
+                            How to Play
+                        </button>
+                        <button id="btn-open-shop" class="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white font-bold py-2 px-4 md:px-6 rounded-full transition-transform transform hover:scale-105 shadow-lg border border-purple-400/30 text-sm md:text-base">
+                            DNA Upgrades
+                        </button>
+                    </div>
+                </div>
+
+                <h1 class="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-500 mb-2 tracking-tighter text-center px-4 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]">NATIVE DEFENDERS</h1>
+                <p class="text-gray-400 mb-6 font-bold tracking-[0.2em] uppercase text-xs md:text-sm text-center px-4">Select your Native Species</p>
+                
+                <!-- NEW: Difficulty Selector -->
+                <div class="flex gap-2 mb-8 bg-slate-900/50 p-1.5 rounded-full border border-white/10 backdrop-blur-md">
+                    <button onclick="setDifficulty('easy')" id="btn-diff-easy" class="px-6 py-2 rounded-full text-sm font-bold text-gray-400 hover:text-white transition-all">EASY</button>
+                    <button onclick="setDifficulty('normal')" id="btn-diff-normal" class="px-6 py-2 rounded-full text-sm font-bold bg-white/20 text-white shadow-sm transition-all">NORMAL</button>
+                    <button onclick="setDifficulty('hard')" id="btn-diff-hard" class="px-6 py-2 rounded-full text-sm font-bold text-gray-400 hover:text-white transition-all">HARD</button>
+                </div>
+
+                <!-- NEW: Extra Features (Bug Street & Arcade) -->
+                <div class="flex flex-wrap justify-center gap-4 mb-8">
+                    <button id="btn-open-stocks" class="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-blue-900 to-blue-800 text-blue-300 hover:text-white border border-blue-500/30 shadow-lg transition-transform hover:scale-105 flex items-center gap-2">
+                        📈 Bug Exchange
+                    </button>
+                </div>
+
+                <div id="level-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-7xl w-full px-6 pb-20">
+                    <!-- Level cards injected here via JS -->
+                </div>
+            </div>
+
+            <!-- HUD -->
+            <div id="hud" class="hidden flex justify-between items-start p-4 pt-6 md:pt-4 w-full">
+                <div id="hud-panel" class="glass-panel p-4 rounded-xl shadow-2xl min-w-[200px] transition-all duration-300">
+                    <h2 id="hud-title" class="text-xl font-black tracking-wider text-white mb-1 uppercase">Species</h2>
+                    <p class="text-sm text-gray-300 mb-2">Goal: <span id="hud-goal" class="font-bold text-green-400">Collect Items</span></p>
+                    
+                    <div class="flex items-baseline space-x-2 mb-2">
+                        <span class="text-xs text-gray-400 uppercase tracking-widest">Score</span>
+                        <span id="hud-score" class="font-bold text-yellow-400 text-2xl">0</span>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-end mb-1">
+                            <span class="text-xs text-gray-400 uppercase tracking-widest">Ammo</span>
+                            <span id="hud-ammo-text" class="font-bold text-blue-400 text-sm">200</span>
+                        </div>
+                        <div class="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
+                            <div id="hud-ammo-bar" class="h-full bg-blue-500 transition-all duration-200" style="width: 100%;"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-2">
+                        <div class="flex justify-between items-end mb-1">
+                            <span class="text-xs text-gray-400 uppercase tracking-widest">Health</span>
+                            <span id="hud-health-text" class="font-bold text-rose-400 text-sm">100</span>
+                        </div>
+                        <div class="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
+                            <div id="hud-health-bar" class="h-full bg-rose-500 transition-all duration-200" style="width: 100%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="mt-2">
+                        <div class="flex justify-between items-end mb-1">
+                            <span class="text-xs text-gray-400 uppercase tracking-widest">Hunger</span>
+                            <span id="hud-hunger-text" class="font-bold text-orange-400 text-sm">100%</span>
+                        </div>
+                        <div class="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
+                            <div id="hud-hunger-bar" class="h-full bg-orange-500 transition-all duration-200" style="width: 100%;"></div>
+                        </div>
+                    </div>
+                    
+                    <div id="powerup-indicator" class="hidden mt-3 text-center bg-yellow-500/20 text-yellow-300 text-xs font-bold py-1 px-2 rounded uppercase tracking-widest animate-pulse">
+                        Frenzy Active!
+                    </div>
+                </div>
+
+                <div class="glass-panel p-3 rounded-xl hidden md:block text-right">
+                    <p class="text-xs text-gray-300 font-semibold mb-1">Controls</p>
+                    <p class="text-xs text-gray-400">WASD / Arrows to Move</p>
+                    <p class="text-xs text-gray-400">Spacebar to Shoot</p>
+                    <div class="mt-2 text-xs text-green-400 font-bold bg-green-500/10 inline-block px-2 py-1 rounded">
+                        Items = +200 Ammo & Food
+                    </div>
+                </div>
+            </div>
+
+            <!-- Game Over Screen -->
+            <div id="game-over-screen" class="hidden pointer-events-auto absolute inset-0 flex items-center justify-center bg-rose-950/90 backdrop-blur-xl z-30 p-4">
+                <div class="glass-panel p-6 md:p-8 rounded-3xl shadow-2xl max-w-lg w-full text-center border-rose-900/50 max-h-[95vh] overflow-y-auto custom-scrollbar">
+                    <h2 id="go-title" class="text-5xl font-black text-rose-500 mb-2 tracking-tight">ECOSYSTEM<br>COLLAPSED</h2>
+                    <div class="h-1 w-20 bg-rose-500 mx-auto rounded mb-6"></div>
+                    
+                    <p class="text-gray-300 mb-8 text-sm leading-relaxed" id="go-fact"></p>
+                    
+                    <div class="my-6 p-6 bg-slate-900/50 rounded-2xl border border-slate-700/50">
+                        <p class="text-sm text-gray-400 uppercase tracking-widest mb-1">Final Score</p>
+                        <p id="go-score" class="font-black text-yellow-400 text-5xl drop-shadow-md mb-2">0</p>
+                        <p class="text-xs text-emerald-400 font-semibold mb-2" id="go-highscore-msg">High Score: <span id="go-highscore">0</span></p>
+                        <!-- NEW: Coins Earned -->
+                        <p class="text-sm text-purple-300 font-bold bg-purple-900/40 rounded-lg py-1 px-3 inline-block border border-purple-500/30">🪙 Earned: +<span id="go-coins">0</span></p>
+                    </div>
+                    
+                    <button id="btn-restart" class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold py-4 px-6 rounded-xl transition-all transform hover:-translate-y-1 hover:shadow-[0_10px_20px_rgba(16,185,129,0.3)] active:scale-95 text-lg uppercase tracking-wider">
+                        Choose New Species
+                    </button>
+                </div>
+            </div>
+            
+            <!-- NEW: DNA Shop Screen -->
+            <div id="shop-screen" class="hidden pointer-events-auto absolute inset-0 flex items-center justify-center bg-slate-950/95 backdrop-blur-2xl z-50 p-4">
+                <div class="glass-panel p-6 md:p-8 rounded-3xl shadow-2xl max-w-2xl w-full border-purple-900/50 flex flex-col max-h-[95vh]">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-indigo-400 tracking-tight">DNA SHOP</h2>
+                        <div class="text-yellow-400 font-bold text-xl bg-slate-900/50 px-4 py-2 rounded-full border border-yellow-500/20">🪙 <span id="shop-coin-display">0</span></div>
+                    </div>
+                    
+                    <!-- Shop Tabs -->
+                    <div class="flex gap-2 mb-4 bg-slate-900/50 p-1.5 rounded-full border border-white/10 backdrop-blur-md shrink-0">
+                        <button id="tab-btn-upgrades" onclick="switchShopTab('upgrades')" class="flex-1 py-2 rounded-full text-sm font-bold bg-white/20 text-white shadow-sm transition-all">Stats</button>
+                        <button id="tab-btn-skins" onclick="switchShopTab('skins')" class="flex-1 py-2 rounded-full text-sm font-bold text-gray-400 hover:text-white transition-all">Closet</button>
+                        <button id="tab-btn-species" onclick="switchShopTab('species')" class="flex-1 py-2 rounded-full text-sm font-bold text-gray-400 hover:text-white transition-all">Species</button>
+                    </div>
+                    
+                    <!-- Stats Upgrades Tab -->
+                    <div id="shop-pane-upgrades" class="overflow-y-auto pr-2 space-y-4 flex-1 custom-scrollbar">
+                        <div class="bg-slate-800/60 p-4 rounded-xl border border-white/5 flex justify-between items-center">
+                            <div>
+                                <h3 class="text-lg font-bold text-white">Thick Hide (Health)</h3>
+                                <p class="text-xs text-gray-400">Increases Max Health by 25. Current: <span id="upg-lvl-health" class="text-emerald-400">Lv 0</span></p>
+                            </div>
+                            <button onclick="buyUpgrade('health')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-sm shadow-md transition-transform active:scale-95 flex items-center gap-1">
+                                <span>Buy</span> <span class="text-yellow-300">🪙 <span id="cost-health">50</span></span>
+                            </button>
+                        </div>
+                        <div class="bg-slate-800/60 p-4 rounded-xl border border-white/5 flex justify-between items-center">
+                            <div>
+                                <h3 class="text-lg font-bold text-white">Ammo Pouch</h3>
+                                <p class="text-xs text-gray-400">Increases Starting Ammo by 50. Current: <span id="upg-lvl-ammo" class="text-emerald-400">Lv 0</span></p>
+                            </div>
+                            <button onclick="buyUpgrade('ammo')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-sm shadow-md transition-transform active:scale-95 flex items-center gap-1">
+                                <span>Buy</span> <span class="text-yellow-300">🪙 <span id="cost-ammo">50</span></span>
+                            </button>
+                        </div>
+                        <div class="bg-slate-800/60 p-4 rounded-xl border border-white/5 flex justify-between items-center">
+                            <div>
+                                <h3 class="text-lg font-bold text-white">Slow Metabolism (Hunger)</h3>
+                                <p class="text-xs text-gray-400">Increases Max Hunger by 25. Current: <span id="upg-lvl-hunger" class="text-emerald-400">Lv 0</span></p>
+                            </div>
+                            <button onclick="buyUpgrade('hunger')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-sm shadow-md transition-transform active:scale-95 flex items-center gap-1">
+                                <span>Buy</span> <span class="text-yellow-300">🪙 <span id="cost-hunger">50</span></span>
+                            </button>
+                        </div>
+                        <div class="bg-slate-800/60 p-4 rounded-xl border border-white/5 flex justify-between items-center">
+                            <div>
+                                <h3 class="text-lg font-bold text-white">Power Surge</h3>
+                                <p class="text-xs text-gray-400">Increases Power-Up duration by 20%. Current: <span id="upg-lvl-powerup" class="text-emerald-400">Lv 0</span></p>
+                            </div>
+                            <button onclick="buyUpgrade('powerup')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-sm shadow-md transition-transform active:scale-95 flex items-center gap-1">
+                                <span>Buy</span> <span class="text-yellow-300">🪙 <span id="cost-powerup">100</span></span>
+                            </button>
+                        </div>
+                        <div class="bg-slate-800/60 p-4 rounded-xl border border-white/5 flex justify-between items-center">
+                            <div>
+                                <h3 class="text-lg font-bold text-white">Fierce Offspring (Baby Fire Rate)</h3>
+                                <p class="text-xs text-gray-400">Adult babies shoot 15% faster. Current: <span id="upg-lvl-babyShot" class="text-emerald-400">Lv 0</span></p>
+                            </div>
+                            <button onclick="buyUpgrade('babyShot')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-sm shadow-md transition-transform active:scale-95 flex items-center gap-1">
+                                <span>Buy</span> <span class="text-yellow-300">🪙 <span id="cost-babyShot">150</span></span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Skins Tab Container -->
+                    <div id="shop-pane-skins" class="hidden overflow-y-auto pr-2 space-y-4 flex-1 custom-scrollbar"></div>
+                    
+                    <!-- Unlockable Species Container -->
+                    <div id="shop-pane-species" class="hidden overflow-y-auto pr-2 space-y-4 flex-1 custom-scrollbar"></div>
+                    
+                    <button id="btn-close-shop" class="mt-6 w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md active:scale-95 text-sm uppercase tracking-wider shrink-0">
+                        Back to Menu
+                    </button>
+                </div>
+            </div>
+
+            <!-- NEW: Instructions Screen -->
+            <div id="instructions-screen" class="hidden pointer-events-auto absolute inset-0 flex items-center justify-center bg-slate-950/95 backdrop-blur-2xl z-50 p-4">
+                <div class="glass-panel p-6 md:p-8 rounded-3xl shadow-2xl max-w-2xl w-full border-emerald-900/50 flex flex-col max-h-[95vh] overflow-y-auto custom-scrollbar">
+                    <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 tracking-tight mb-6 text-center">HOW TO PLAY</h2>
+                    
+                    <div class="space-y-4 text-gray-300 text-sm">
+                        <div class="bg-slate-800/60 p-4 rounded-xl border border-white/5">
+                            <h3 class="text-lg font-bold text-white mb-2">🎯 The Goal</h3>
+                            <p>Play as a native species defending against an invasive threat! Collect your specific food items to survive, refill your ammo, and score points.</p>
+                        </div>
+                        
+                        <div class="bg-slate-800/60 p-4 rounded-xl border border-white/5">
+                            <h3 class="text-lg font-bold text-white mb-2">🎮 Controls</h3>
+                            <ul class="list-disc pl-5 space-y-1">
+                                <li><strong class="text-emerald-400">Move:</strong> WASD or Arrow Keys (Mobile: Touch Joystick)</li>
+                                <li><strong class="text-rose-400">Shoot:</strong> Hold Spacebar (Mobile: Hold FIRE button)</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="bg-slate-800/60 p-4 rounded-xl border border-white/5">
+                            <h3 class="text-lg font-bold text-white mb-2">⚠️ Mechanics</h3>
+                            <ul class="list-disc pl-5 space-y-2">
+                                <li><strong class="text-orange-400">Hunger:</strong> Your hunger constantly drains. If it hits 0%, you starve! Collect food to restore it.</li>
+                                <li><strong class="text-blue-400">Ammo:</strong> Shooting costs ammo. Collecting food grants +200 Ammo.</li>
+                                <li><strong class="text-pink-400">Babies:</strong> Protect them! If an enemy touches them, you lose ammo and hunger. If they survive, they grow into adults, shoot at enemies, and breed!</li>
+                                <li><strong class="text-yellow-400">Power-ups:</strong> Grab glowing orbs for powerful temporary abilities.</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <button id="btn-close-instructions" class="mt-6 w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md active:scale-95 text-sm uppercase tracking-wider shrink-0">
+                        Understood!
+                    </button>
+                </div>
+            </div>
+
+            <!-- NEW: Quests Screen -->
+            <div id="quests-screen" class="hidden pointer-events-auto absolute inset-0 flex items-center justify-center bg-slate-950/95 backdrop-blur-2xl z-50 p-4">
+                <div class="glass-panel p-6 md:p-8 rounded-3xl shadow-2xl max-w-2xl w-full border-amber-900/50 flex flex-col max-h-[95vh] overflow-y-auto custom-scrollbar">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400 tracking-tight">BOUNTY QUESTS</h2>
+                        <div class="text-yellow-400 font-bold text-xl bg-slate-900/50 px-4 py-2 rounded-full border border-yellow-500/20">🪙 <span id="quest-coin-display">0</span></div>
+                    </div>
+                    
+                    <p class="text-gray-400 text-sm mb-4">Complete these monumental tasks to earn massive DNA coin payouts!</p>
+                    
+                    <div id="quest-list" class="space-y-4 mb-6">
+                        <!-- Quests populated by JS -->
+                    </div>
+                    
+                    <button id="btn-close-quests" class="mt-auto w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md active:scale-95 text-sm uppercase tracking-wider shrink-0">
+                        Back to Menu
+                    </button>
+                </div>
+            </div>
+
+            <!-- ENHANCED: Bug Exchange Screen -->
+            <div id="stocks-screen" class="hidden pointer-events-auto absolute inset-0 flex items-center justify-center bg-slate-950/95 backdrop-blur-2xl z-50 p-4">
+                <div class="glass-panel p-6 md:p-8 rounded-3xl shadow-2xl max-w-2xl w-full border-blue-900/50 flex flex-col max-h-[95vh] overflow-y-auto custom-scrollbar">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400 tracking-tight">BUG EXCHANGE</h2>
+                        <div class="text-yellow-400 font-bold text-xl bg-slate-900/50 px-4 py-2 rounded-full border border-yellow-500/20">🪙 <span id="stock-coin-display">0</span></div>
+                    </div>
+
+                    <!-- Stock Chart -->
+                    <div class="w-full bg-slate-900 rounded-xl p-2 mb-4 border border-white/10 relative h-32 md:h-48 shrink-0">
+                        <canvas id="stock-chart-canvas" class="w-full h-full"></canvas>
+                        <div class="absolute top-2 left-2 text-[10px] text-gray-500 font-bold">LIVE MARKET TRENDS</div>
+                    </div>
+                    
+                    <!-- Market Upgrades -->
+                    <div class="flex gap-2 mb-4 shrink-0 overflow-x-auto custom-scrollbar pb-2">
+                        <button onclick="buyStockUpgrade('hft')" class="flex-1 bg-gradient-to-r from-indigo-700 to-blue-800 hover:from-indigo-600 hover:to-blue-700 text-white font-bold py-2 px-3 rounded-lg text-xs shadow-md transition-transform active:scale-95 whitespace-nowrap border border-blue-500/30">
+                            Upgrade Speed (HFT) <br><span class="text-yellow-300" id="cost-hft">🪙 500</span>
+                        </button>
+                        <button onclick="buyStockUpgrade('insider')" class="flex-1 bg-gradient-to-r from-purple-700 to-fuchsia-800 hover:from-purple-600 hover:to-fuchsia-700 text-white font-bold py-2 px-3 rounded-lg text-xs shadow-md transition-transform active:scale-95 whitespace-nowrap border border-purple-500/30">
+                            Insider Info (Arrows) <br><span class="text-yellow-300" id="cost-insider">🪙 1000</span>
+                        </button>
+                    </div>
+                    
+                    <div id="stock-list" class="space-y-3 mb-4">
+                        <!-- Stocks populated by JS -->
+                    </div>
+                    
+                    <button id="btn-close-stocks" class="mt-auto w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md active:scale-95 text-sm uppercase tracking-wider shrink-0">
+                        Back to Menu
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mobile Controls -->
+            <div id="mobile-controls">
+                <div class="joystick-base" id="joystick">
+                    <div class="joystick-stick" id="stick"></div>
+                </div>
+                <div class="action-btn" id="btn-shoot">FIRE</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const bgCanvas = document.getElementById('bgCanvas');
+        const bgCtx = bgCanvas.getContext('2d');
+
+        // UI Elements
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const shopScreen = document.getElementById('shop-screen');
+        const instructionsScreen = document.getElementById('instructions-screen');
+        const hud = document.getElementById('hud');
+        const hudPanel = document.getElementById('hud-panel');
+        const levelList = document.getElementById('level-list');
+        const hudAmmoBar = document.getElementById('hud-ammo-bar');
+        const hudHungerBar = document.getElementById('hud-hunger-bar');
+        const hudHealthBar = document.getElementById('hud-health-bar');
+        const powerupIndicator = document.getElementById('powerup-indicator');
+        
+        let width, height;
+        let isPlaying = false;
+        let lastTime = 0;
+        let animationId;
+
+        // Game State & Polish variables
+        let player, enemies, items, powerups, particles, projectiles, babies;
+        let decoys, turrets, vortexes, poisonPuddles;
+        let score = 0;
+        let ammo = 200;
+        let MAX_AMMO = 1000;
+        let hunger = 100;
+        let MAX_HUNGER = 100;
+        let health = 100;
+        let MAX_HEALTH = 100;
+        let config = null; 
+        let spawnTimer = 0;
+        let lastSpawnTime = 0;
+        let shakeTime = 0;
+        let shakeMagnitude = 0;
+        let babyRespawnTimer = 0;
+
+        // --- NEW: Difficulty & Shop State ---
+        let coins = parseInt(localStorage.getItem('nd_coins')) || 0;
+        let upgrades = JSON.parse(localStorage.getItem('nd_upgrades')) || { health: 0, ammo: 0, hunger: 0, powerup: 0 };
+        if (upgrades.babyShot === undefined) upgrades.babyShot = 0; // Fallback for returning players
+        let unlockedSpecies = JSON.parse(localStorage.getItem('nd_unlocked_species')) || [];
+        let ownedSkins = JSON.parse(localStorage.getItem('nd_owned_skins')) || ['default'];
+        let equippedSkin = localStorage.getItem('nd_equipped_skin') || 'default';
+        
+        // --- NEW: Quests & Stats State ---
+        let stats = JSON.parse(localStorage.getItem('nd_stats')) || { totalScore: 0, totalUpgrades: 0, matchCoins: 0, highestScore: 0 };
+        let questState = JSON.parse(localStorage.getItem('nd_quests')) || { q1: false, q2: false, q3: false, q4: false };
+        
+        const questsData = [
+            { id: 'q1', title: 'Apex Predator', desc: 'Reach a score of 5,000 in a single run.', reward: 1500, check: () => stats.highestScore >= 5000 },
+            { id: 'q2', title: 'Generational Wealth', desc: 'Accumulate 50,000 total score across all games.', reward: 2000, check: () => stats.totalScore >= 50000 },
+            { id: 'q3', title: 'Evolutionary Leap', desc: 'Purchase 10 total DNA upgrades in the shop.', reward: 1000, check: () => stats.totalUpgrades >= 10 },
+            { id: 'q4', title: 'Bounty Hunter', desc: 'Earn 5,000 total coins purely from playing matches.', reward: 1200, check: () => stats.matchCoins >= 5000 }
+        ];
+
+        // NEW: Stock Market & Minigame State
+        let stocks = JSON.parse(localStorage.getItem('nd_stocks')) || {};
+        const defaultStocks = {
+            pestcorp: { name: "PestCorp Ltd.", price: 15, min: 5, max: 40, volatility: 0.1, owned: 0, color: "#3b82f6" },
+            mosquitec: { name: "MosquiTech Inc.", price: 50, min: 20, max: 150, volatility: 0.2, owned: 0, color: "#22c55e" },
+            webweavers: { name: "WebWeavers LLC", price: 120, min: 40, max: 600, volatility: 0.4, owned: 0, color: "#ef4444" },
+            locust: { name: "Locust Logistics", price: 250, min: 80, max: 800, volatility: 0.5, owned: 0, color: "#f59e0b" },
+            wasp: { name: "WaspWorks", price: 500, min: 200, max: 2000, volatility: 0.7, owned: 0, color: "#a855f7" },
+            ant: { name: "Ant Army LLC", price: 1000, min: 400, max: 5000, volatility: 0.9, owned: 0, color: "#ec4899" }
+        };
+        
+        // Merge missing stocks & initialize history/nextMove safely
+        Object.keys(defaultStocks).forEach(k => {
+            if (!stocks[k]) stocks[k] = defaultStocks[k];
+            if (!stocks[k].history) stocks[k].history = Array(20).fill(stocks[k].price);
+            if (!stocks[k].color) stocks[k].color = defaultStocks[k].color;
+            if (stocks[k].nextChange === undefined) {
+                stocks[k].nextChange = 1 + (Math.random() * (stocks[k].volatility * 2) - stocks[k].volatility);
+            }
+        });
+        
+        let stockUpgrades = JSON.parse(localStorage.getItem('nd_stockUpgrades')) || { hft: 0, insider: 0 };
+        let stockInterval = null;
+        
+        let currentDifficulty = 'normal';
+        const diffSettings = {
+            easy: { spawnMult: 3.0, speedMult: 0.5, hpMult: 0.4, maxEnemyMult: 0.4, coinMult: 0.5 },
+            normal: { spawnMult: 1.5, speedMult: 0.8, hpMult: 0.8, maxEnemyMult: 0.7, coinMult: 1.0 },
+            hard: { spawnMult: 0.8, speedMult: 1.1, hpMult: 1.2, maxEnemyMult: 1.2, coinMult: 2.0 }
+        };
+        const upgradeCosts = { health: 50, ammo: 50, hunger: 50, powerup: 100, babyShot: 150 };
+
+        const skinsData = [
+            { id: 'default', name: 'Natural (Default)', price: 0, desc: 'Your species natural coloring.' },
+            { id: 'neon', name: 'Cyber Neon', price: 300, desc: 'Bright glowing cyan aura.' },
+            { id: 'gold', name: 'Solid Gold', price: 500, desc: 'Shining metallic gold body.' },
+            { id: 'void', name: 'Void Shadow', price: 800, desc: 'Pitch black with a dark purple aura.' }
+        ];
+
+        function saveGameData() {
+            localStorage.setItem('nd_coins', coins);
+            localStorage.setItem('nd_upgrades', JSON.stringify(upgrades));
+            localStorage.setItem('nd_unlocked_species', JSON.stringify(unlockedSpecies));
+            localStorage.setItem('nd_owned_skins', JSON.stringify(ownedSkins));
+            localStorage.setItem('nd_equipped_skin', equippedSkin);
+            localStorage.setItem('nd_stocks', JSON.stringify(stocks));
+            localStorage.setItem('nd_stockUpgrades', JSON.stringify(stockUpgrades));
+            localStorage.setItem('nd_stats', JSON.stringify(stats));
+            localStorage.setItem('nd_quests', JSON.stringify(questState));
+            updateCoinDisplays();
+        }
+
+        function updateCoinDisplays() {
+            if(document.getElementById('coin-display')) document.getElementById('coin-display').innerText = coins;
+            if(document.getElementById('shop-coin-display')) document.getElementById('shop-coin-display').innerText = coins;
+            if(document.getElementById('stock-coin-display')) document.getElementById('stock-coin-display').innerText = coins;
+            if(document.getElementById('quest-coin-display')) document.getElementById('quest-coin-display').innerText = coins;
+        }
+
+        function setDifficulty(diff) {
+            currentDifficulty = diff;
+            ['easy', 'normal', 'hard'].forEach(d => {
+                const btn = document.getElementById('btn-diff-' + d);
+                if(d === diff) {
+                    btn.className = "px-6 py-2 rounded-full text-sm font-bold bg-white/20 text-white shadow-sm transition-all";
+                } else {
+                    btn.className = "px-6 py-2 rounded-full text-sm font-bold text-gray-400 hover:text-white transition-all";
+                }
+            });
+        }
+
+        function getUpgradeCost(type) { return upgradeCosts[type] * (upgrades[type] + 1); }
+
+        function updateShopUI() {
+            updateCoinDisplays();
+            ['health', 'ammo', 'hunger', 'powerup', 'babyShot'].forEach(type => {
+                document.getElementById(`upg-lvl-${type}`).innerText = `Lv ${upgrades[type]}`;
+                document.getElementById(`cost-${type}`).innerText = getUpgradeCost(type);
+            });
+            renderSkinsTab();
+            renderSpeciesTab();
+        }
+
+        function buyUpgrade(type) {
+            const cost = getUpgradeCost(type);
+            if(coins >= cost) {
+                coins -= cost;
+                upgrades[type]++;
+                stats.totalUpgrades++;
+                saveGameData();
+                updateShopUI();
+                Sound.play('collect');
+            } else {
+                Sound.play('hit'); 
+            }
+        }
+
+        function switchShopTab(tab) {
+            ['upgrades', 'skins', 'species'].forEach(t => {
+                const btn = document.getElementById(`tab-btn-${t}`);
+                if(btn) {
+                    btn.className = t === tab 
+                        ? "flex-1 py-2 rounded-full text-sm font-bold bg-white/20 text-white shadow-sm transition-all"
+                        : "flex-1 py-2 rounded-full text-sm font-bold text-gray-400 hover:text-white transition-all";
+                }
+                const pane = document.getElementById(`shop-pane-${t}`);
+                if(pane) pane.classList.toggle('hidden', t !== tab);
+            });
+            if(tab === 'skins') renderSkinsTab();
+            if(tab === 'species') renderSpeciesTab();
+        }
+
+        function renderSkinsTab() {
+            const pane = document.getElementById('shop-pane-skins');
+            if(!pane) return;
+            pane.innerHTML = skinsData.map(skin => {
+                const isOwned = ownedSkins.includes(skin.id);
+                const isEquipped = equippedSkin === skin.id;
+                let btnHtml = '';
+                if(isEquipped) {
+                    btnHtml = `<button class="bg-emerald-600/50 text-emerald-300 font-bold py-2 px-4 rounded-lg text-sm cursor-default flex items-center gap-1">Equipped</button>`;
+                } else if(isOwned) {
+                    btnHtml = `<button onclick="equipSkin('${skin.id}')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-sm shadow-md transition-transform active:scale-95 flex items-center gap-1">Equip</button>`;
+                } else {
+                    btnHtml = `<button onclick="buySkin('${skin.id}', ${skin.price})" class="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-lg text-sm shadow-md transition-transform active:scale-95 flex items-center gap-1 shrink-0"><span>Buy</span> <span class="text-yellow-300">🪙 ${skin.price}</span></button>`;
+                }
+                
+                return `
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-white/5 flex justify-between items-center gap-4">
+                    <div>
+                        <h3 class="text-lg font-bold ${isEquipped ? 'text-emerald-400' : 'text-white'}">${skin.name}</h3>
+                        <p class="text-xs text-gray-400">${skin.desc}</p>
+                    </div>
+                    ${btnHtml}
+                </div>`;
+            }).join('');
+        }
+
+        function equipSkin(id) {
+            equippedSkin = id;
+            saveGameData();
+            renderSkinsTab();
+            Sound.play('collect');
+        }
+
+        function buySkin(id, price) {
+            if(coins >= price) {
+                coins -= price;
+                ownedSkins.push(id);
+                equippedSkin = id;
+                saveGameData();
+                renderSkinsTab();
+                Sound.play('powerup');
+            } else {
+                Sound.play('hit');
+            }
+        }
+
+        function renderSpeciesTab() {
+            const pane = document.getElementById('shop-pane-species');
+            if(!pane) return;
+            const lockedLevels = levels.filter(l => l.locked);
+            pane.innerHTML = lockedLevels.map(lvl => {
+                const isUnlocked = unlockedSpecies.includes(lvl.id);
+                let btnHtml = isUnlocked 
+                    ? `<button class="bg-emerald-600/50 text-emerald-300 font-bold py-2 px-4 rounded-lg text-sm cursor-default">Unlocked</button>`
+                    : `<button onclick="buySpecies('${lvl.id}', ${lvl.price})" class="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-lg text-sm shadow-md transition-transform active:scale-95 flex items-center gap-1 shrink-0"><span>Buy</span> <span class="text-yellow-300">🪙 ${lvl.price}</span></button>`;
+                
+                return `
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-white/5 flex justify-between items-center gap-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-white">${lvl.name} <span class="text-xs font-normal text-gray-400 block md:inline">vs ${lvl.enemy}</span></h3>
+                        <p class="text-xs text-gray-400 line-clamp-2">${lvl.goal}</p>
+                    </div>
+                    ${btnHtml}
+                </div>`;
+            }).join('');
+        }
+
+        function buySpecies(id, price) {
+            if(coins >= price) {
+                coins -= price;
+                unlockedSpecies.push(id);
+                saveGameData();
+                renderSpeciesTab();
+                initLevelSelect(); 
+                Sound.play('powerup');
+            } else {
+                Sound.play('hit');
+            }
+        }
+
+        document.getElementById('btn-open-shop').addEventListener('click', () => {
+            updateShopUI();
+            switchShopTab('upgrades'); // Reset to first tab
+            startScreen.classList.add('hidden');
+            shopScreen.classList.remove('hidden');
+        });
+        document.getElementById('btn-close-shop').addEventListener('click', () => {
+            shopScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+        });
+
+        document.getElementById('btn-open-instructions').addEventListener('click', () => {
+            startScreen.classList.add('hidden');
+            instructionsScreen.classList.remove('hidden');
+        });
+        
+        document.getElementById('btn-close-instructions').addEventListener('click', () => {
+            instructionsScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+        });
+
+        // --- NEW: Quests Logic ---
+        function renderQuests() {
+            const list = document.getElementById('quest-list');
+            if(!list) return;
+            
+            list.innerHTML = questsData.map(q => {
+                const isCompleted = questState[q.id];
+                const canClaim = !isCompleted && q.check();
+                
+                let btnHtml = '';
+                if(isCompleted) {
+                    btnHtml = `<button class="bg-emerald-600/50 text-emerald-300 font-bold py-2 px-4 rounded-lg text-sm cursor-default">Completed</button>`;
+                } else if(canClaim) {
+                    btnHtml = `<button onclick="claimQuest('${q.id}')" class="bg-amber-500 hover:bg-amber-400 text-white font-bold py-2 px-4 rounded-lg text-sm shadow-[0_0_15px_rgba(245,158,11,0.5)] transition-transform active:scale-95 animate-pulse">Claim 🪙 ${q.reward}</button>`;
+                } else {
+                    btnHtml = `<button class="bg-slate-700 text-gray-400 font-bold py-2 px-4 rounded-lg text-sm cursor-not-allowed">Reward 🪙 ${q.reward}</button>`;
+                }
+                
+                return `
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-white/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h3 class="text-lg font-bold ${isCompleted ? 'text-gray-500 line-through' : 'text-white'}">${q.title}</h3>
+                        <p class="text-xs ${isCompleted ? 'text-gray-600' : 'text-gray-400'}">${q.desc}</p>
+                    </div>
+                    <div class="shrink-0 w-full md:w-auto mt-2 md:mt-0 text-right">
+                        ${btnHtml}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function claimQuest(id) {
+            const quest = questsData.find(q => q.id === id);
+            if(quest && !questState[id] && quest.check()) {
+                questState[id] = true;
+                coins += quest.reward;
+                saveGameData();
+                renderQuests();
+                Sound.play('powerup');
+            }
+        }
+        
+        document.getElementById('btn-open-quests').addEventListener('click', () => {
+            startScreen.classList.add('hidden');
+            document.getElementById('quests-screen').classList.remove('hidden');
+            renderQuests();
+        });
+        document.getElementById('btn-close-quests').addEventListener('click', () => {
+            document.getElementById('quests-screen').classList.add('hidden');
+            startScreen.classList.remove('hidden');
+        });
+
+        // --- ENHANCED: Bug Exchange (Stocks) Logic ---
+        function renderStocks() {
+            const list = document.getElementById('stock-list');
+            if(!list) return;
+            
+            // Render Market Upgrades
+            const hftCost = stockUpgrades.hft >= 2 ? 'MAX' : (stockUpgrades.hft === 0 ? 500 : 1500);
+            document.getElementById('cost-hft').innerText = stockUpgrades.hft >= 2 ? 'MAX' : `🪙 ${hftCost}`;
+            const insiderCost = stockUpgrades.insider >= 1 ? 'MAX' : 1000;
+            document.getElementById('cost-insider').innerText = stockUpgrades.insider >= 1 ? 'MAX' : `🪙 ${insiderCost}`;
+            
+            list.innerHTML = Object.keys(stocks).map(key => {
+                const s = stocks[key];
+                
+                // Insider Trading Logic
+                let indicatorHtml = '';
+                if (stockUpgrades.insider > 0) {
+                    const willGoUp = s.nextChange >= 1.0;
+                    indicatorHtml = willGoUp 
+                        ? `<span class="text-green-400 text-sm ml-2 font-black">▲</span>` 
+                        : `<span class="text-red-400 text-sm ml-2 font-black">▼</span>`;
+                }
+                
+                return `
+                <div class="bg-slate-800/60 p-3 md:p-4 rounded-xl border border-white/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-2 md:gap-4">
+                    <div>
+                        <h3 class="text-base md:text-lg font-bold text-white flex items-center">
+                            <span style="color: ${s.color}; font-size: 1.2em; margin-right: 4px;">•</span> 
+                            ${s.name} ${indicatorHtml}
+                        </h3>
+                        <p class="text-sm font-bold text-yellow-400">🪙 ${Math.floor(s.price)} <span class="text-xs text-gray-500 font-normal">/ share</span></p>
+                        <p class="text-xs text-gray-400">Owned: <span class="text-blue-300 font-bold">${s.owned}</span></p>
+                    </div>
+                    <div class="flex gap-2 w-full md:w-auto">
+                        <button onclick="buyStock('${key}')" class="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 md:px-4 rounded-lg text-xs md:text-sm shadow-md transition-transform active:scale-95">Buy</button>
+                        <button onclick="sellStock('${key}')" class="flex-1 md:flex-none bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 px-3 md:px-4 rounded-lg text-xs md:text-sm shadow-md transition-transform active:scale-95 ${s.owned === 0 ? 'opacity-50 cursor-not-allowed' : ''}" ${s.owned === 0 ? 'disabled' : ''}>Sell</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function drawStockChart() {
+            const canvas = document.getElementById('stock-chart-canvas');
+            const parent = canvas.parentElement;
+            // Handle retina scaling
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = parent.clientWidth * dpr;
+            canvas.height = parent.clientHeight * dpr;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            
+            const w = parent.clientWidth;
+            const h = parent.clientHeight;
+            
+            ctx.clearRect(0, 0, w, h);
+            
+            // Draw Grid
+            ctx.strokeStyle = "rgba(255,255,255,0.05)";
+            ctx.lineWidth = 1;
+            for(let i=0; i<4; i++) {
+                ctx.beginPath(); ctx.moveTo(0, h * (i/4)); ctx.lineTo(w, h * (i/4)); ctx.stroke();
+            }
+
+            // Find global min and max to scale chart
+            let globalMax = 0; let globalMin = Infinity;
+            Object.values(stocks).forEach(s => {
+                s.history.forEach(p => {
+                    if (p > globalMax) globalMax = p;
+                    if (p < globalMin) globalMin = p;
+                });
+            });
+            globalMax *= 1.1; // Add padding top
+            if(globalMin > globalMax) globalMin = 0;
+
+            const range = globalMax - globalMin || 1;
+
+            // Draw Lines
+            Object.values(stocks).forEach(s => {
+                ctx.beginPath();
+                ctx.strokeStyle = s.color || "#ffffff";
+                ctx.lineWidth = 2;
+                ctx.lineJoin = "round";
+                
+                const segmentWidth = w / (s.history.length - 1);
+                
+                for(let i=0; i<s.history.length; i++) {
+                    const price = s.history[i];
+                    const x = i * segmentWidth;
+                    const y = h - ((price - globalMin) / range) * h;
+                    if(i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            });
+        }
+
+        function tickStocks() {
+            Object.keys(stocks).forEach(key => {
+                const s = stocks[key];
+                
+                // Apply the previously generated nextChange
+                s.price = Math.max(s.min, Math.min(s.max, s.price * s.nextChange));
+                
+                // Generate the NEXT change (for Insider Info prediction)
+                s.nextChange = 1 + (Math.random() * (s.volatility * 2) - s.volatility);
+                
+                // Update history
+                s.history.push(s.price);
+                if (s.history.length > 20) s.history.shift();
+            });
+            renderStocks();
+            drawStockChart();
+            saveGameData(); // Save new prices
+        }
+        
+        function buyStockUpgrade(type) {
+            if (type === 'hft') {
+                const cost = stockUpgrades.hft === 0 ? 500 : 1500;
+                if (stockUpgrades.hft < 2 && coins >= cost) {
+                    coins -= cost; stockUpgrades.hft++; saveGameData(); updateStockInterval(); renderStocks(); Sound.play('powerup');
+                } else if (coins < cost) { Sound.play('hit'); }
+            } else if (type === 'insider') {
+                const cost = 1000;
+                if (stockUpgrades.insider < 1 && coins >= cost) {
+                    coins -= cost; stockUpgrades.insider++; saveGameData(); renderStocks(); Sound.play('powerup');
+                } else if (coins < cost) { Sound.play('hit'); }
+            }
+        }
+        
+        function updateStockInterval() {
+            if (stockInterval) clearInterval(stockInterval);
+            const speeds = [3000, 2000, 1000]; // Based on HFT level
+            const delay = speeds[stockUpgrades.hft] || 3000;
+            stockInterval = setInterval(tickStocks, delay);
+        }
+
+        function buyStock(key) {
+            const s = stocks[key];
+            const price = Math.floor(s.price);
+            if(coins >= price) {
+                coins -= price;
+                s.owned++;
+                saveGameData();
+                renderStocks();
+                Sound.play('collect');
+            } else {
+                Sound.play('hit');
+            }
+        }
+
+        function sellStock(key) {
+            const s = stocks[key];
+            if(s.owned > 0) {
+                const price = Math.floor(s.price);
+                coins += price;
+                s.owned--;
+                saveGameData();
+                renderStocks();
+                Sound.play('powerup');
+            }
+        }
+        
+        document.getElementById('btn-open-stocks').addEventListener('click', () => {
+            startScreen.classList.add('hidden');
+            document.getElementById('stocks-screen').classList.remove('hidden');
+            renderStocks();
+            // Wait slightly for layout to settle before drawing chart
+            setTimeout(drawStockChart, 50); 
+            updateStockInterval();
+        });
+        
+        document.getElementById('btn-close-stocks').addEventListener('click', () => {
+            document.getElementById('stocks-screen').classList.add('hidden');
+            startScreen.classList.remove('hidden');
+            clearInterval(stockInterval);
+            stockInterval = null;
+        });
+
+        // Initialize UI values
+        updateCoinDisplays();
+
+        // Sound System
+        const Sound = {
+            initialized: false,
+            synths: {},
+            init: async function() {
+                if(this.initialized) return;
+                await Tone.start();
+                this.synths.shoot = new Tone.Synth({ oscillator: { type: "square" }, envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 } }).toDestination();
+                this.synths.shoot.volume.value = -15;
+                
+                this.synths.collect = new Tone.PolySynth(Tone.Synth, { envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 } }).toDestination();
+                this.synths.collect.volume.value = -12;
+                
+                this.synths.powerup = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "triangle" }, envelope: { attack: 0.01, decay: 0.4, sustain: 0.2, release: 0.4 } }).toDestination();
+                this.synths.powerup.volume.value = -8;
+                
+                this.synths.noise = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0 } }).toDestination();
+                this.synths.noise.volume.value = -15;
+
+                this.synths.die = new Tone.NoiseSynth({ noise: { type: 'brown' }, envelope: { attack: 0.01, decay: 0.3, sustain: 0 } }).toDestination();
+                this.synths.die.volume.value = -10;
+                
+                this.initialized = true;
+            },
+            play: function(type) {
+                if(!this.initialized) return;
+                try {
+                    switch(type) {
+                        case 'shoot': this.synths.shoot.triggerAttackRelease("C5", "32n"); break;
+                        case 'collect': this.synths.collect.triggerAttackRelease(["E5", "G5"], "16n"); break;
+                        case 'powerup': this.synths.powerup.triggerAttackRelease(["C4", "E4", "G4", "C5"], "8n"); break;
+                        case 'hit': this.synths.noise.triggerAttackRelease("32n"); break;
+                        case 'die': this.synths.die.triggerAttackRelease("16n"); break;
+                        case 'gameover': this.synths.shoot.triggerAttackRelease("A2", "2n"); break;
+                        case 'nuke': this.synths.die.triggerAttackRelease("2n"); break;
+                    }
+                } catch(e){}
+            }
+        };
+
+        // Controls state
+        const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false, ' ': false };
+        let joystickVector = { x: 0, y: 0 };
+
+        // Configuration
+        const levels = [
+            {
+                id: "squirrel",
+                name: "Red Squirrel",
+                enemy: "Spongy Moth",
+                bgColor: "#1e293b", groundColor: "#0f172a",
+                playerColor: "#ea580c", enemyColor: "#65a30d", itemColor: "#8b5cf6",
+                goal: "Collect Pinecones",
+                fact: "Invasive Spongy Moths defoliate entire forests, destroying the habitat and food sources that native Red Squirrels rely on to survive.",
+                playerSpeed: 0.45, enemySpeed: 0.1, spawnRate: 2000, enemyHp: 2,
+                projectileColor: "#fde047", shape: "circle", generateBg: generateForestBg
+            },
+            {
+                id: "bluebird",
+                name: "Eastern Bluebird",
+                enemy: "Emerald Ash Borer",
+                bgColor: "#0ea5e9", groundColor: "#0284c7",
+                playerColor: "#3b82f6", enemyColor: "#10b981", itemColor: "#fbbf24", 
+                goal: "Gather Twigs",
+                fact: "The Emerald Ash Borer is a destructive beetle that kills millions of ash trees, destroying critical nesting habitats for native birds.",
+                playerSpeed: 0.5, enemySpeed: 0.12, spawnRate: 1500, enemyHp: 2,
+                projectileColor: "#bae6fd", shape: "bird", generateBg: generateMeadowBg
+            },
+            {
+                id: "frog",
+                name: "Green Tree Frog",
+                enemy: "Giant Water Bug",
+                bgColor: "#0f766e", groundColor: "#115e59", 
+                playerColor: "#22c55e", enemyColor: "#451a03", itemColor: "#000000", 
+                goal: "Catch Flies",
+                fact: "Invasive species of giant water bugs are aggressive predators that will actively hunt and consume small native frogs and tadpoles.",
+                playerSpeed: 0.45, enemySpeed: 0.08, spawnRate: 2500, enemyHp: 4,
+                projectileColor: "#86efac", shape: "wide", generateBg: generateSwampBg
+            },
+            {
+                id: "axolotl",
+                name: "Axolotl",
+                enemy: "Diving Beetle",
+                bgColor: "#172554", groundColor: "#1e3a8a", 
+                playerColor: "#f472b6", enemyColor: "#1e293b", itemColor: "#ef4444", 
+                goal: "Eat Worms",
+                fact: "Aggressive predaceous diving beetles prey on axolotl eggs and juveniles, adding to the threats facing this critically endangered species.",
+                playerSpeed: 0.35, enemySpeed: 0.1, spawnRate: 2200, enemyHp: 2,
+                projectileColor: "#fbcfe8", shape: "wide", generateBg: generateCanalBg
+            },
+            {
+                id: "grouper",
+                name: "Nassau Grouper",
+                enemy: "Sea Louse Swarm",
+                bgColor: "#0284c7", groundColor: "#0369a1", 
+                playerColor: "#eab308", enemyColor: "#cbd5e1", itemColor: "#f97316", 
+                goal: "Hunt Shrimp",
+                fact: "While technically crustaceans (the insects of the sea), parasitic sea lice swarms latch onto fish and severely drain their energy and health.",
+                playerSpeed: 0.45, enemySpeed: 0.11, spawnRate: 1800, enemyHp: 3,
+                projectileColor: "#fef08a", shape: "wide", generateBg: generateReefBg
+            },
+            {
+                id: "mink",
+                name: "European Mink",
+                enemy: "Invasive Tick",
+                bgColor: "#1e3a8a", groundColor: "#334155", 
+                playerColor: "#b45309", enemyColor: "#7f1d1d", itemColor: "#38bdf8", 
+                goal: "Catch Fish",
+                fact: "Invasive tick species spread rapidly in new environments, attaching to native mammals like minks and spreading debilitating diseases.",
+                playerSpeed: 0.4, enemySpeed: 0.08, spawnRate: 1700, enemyHp: 3,
+                projectileColor: "#7dd3fc", shape: "wide", generateBg: generateRiverBg
+            },
+            {
+                id: "honeycreeper",
+                name: "Honeycreeper",
+                enemy: "House Mosquito",
+                bgColor: "#14532d", groundColor: "#064e3b",
+                playerColor: "#ef4444", enemyColor: "#9ca3af", itemColor: "#fcd34d", 
+                goal: "Drink Nectar",
+                fact: "Hawaiian Honeycreepers have no natural immunity to Avian Malaria, which is transmitted by introduced House Mosquitoes.",
+                playerSpeed: 0.5, enemySpeed: 0.12, spawnRate: 1200, enemyHp: 1,
+                projectileColor: "#fde68a", shape: "bird", generateBg: generateJungleBg
+            },
+            {
+                id: "ladybug",
+                name: "9-Spot Ladybug",
+                enemy: "Stink Bug",
+                bgColor: "#86efac", groundColor: "#4ade80",
+                playerColor: "#dc2626", enemyColor: "#78350f", itemColor: "#475569", 
+                goal: "Eat Aphids",
+                fact: "The invasive Brown Marmorated Stink Bug devastates local crops and directly competes with native insects for territory and resources.",
+                playerSpeed: 0.45, enemySpeed: 0.09, spawnRate: 1400, enemyHp: 2,
+                projectileColor: "#ffffff", shape: "circle", generateBg: generateGardenBg
+            },
+            {
+                id: "koala",
+                name: "Koala",
+                enemy: "Fire Ant Swarm",
+                bgColor: "#78350f", groundColor: "#92400e",
+                playerColor: "#9ca3af", enemyColor: "#dc2626", itemColor: "#4ade80", 
+                goal: "Eat Eucalyptus",
+                fact: "Invasive Red Imported Fire Ants swarm native wildlife like Koalas, stinging their eyes and severely threatening their survival.",
+                playerSpeed: 0.35, enemySpeed: 0.12, spawnRate: 1500, enemyHp: 1,
+                projectileColor: "#86efac", shape: "circle", generateBg: generateOutbackBg
+            },
+            {
+                id: "monarch",
+                name: "Monarch Butterfly",
+                enemy: "Tachinid Fly",
+                bgColor: "#f59e0b", groundColor: "#fbbf24",
+                playerColor: "#ea580c", enemyColor: "#1f2937", itemColor: "#f472b6", 
+                goal: "Drink Nectar",
+                fact: "Introduced parasitic Tachinid Flies lay eggs on Monarch caterpillars, decimating the native butterfly populations before they can hatch.",
+                playerSpeed: 0.5, enemySpeed: 0.14, spawnRate: 1300, enemyHp: 1,
+                projectileColor: "#fcd34d", shape: "bird", generateBg: generateGardenBg
+            },
+            {
+                id: "tortoise",
+                name: "Desert Tortoise",
+                enemy: "Africanized Bee",
+                bgColor: "#b45309", groundColor: "#d97706",
+                playerColor: "#65a30d", enemyColor: "#facc15", itemColor: "#10b981", 
+                goal: "Eat Cactus",
+                fact: "Highly aggressive Africanized Honey Bees frequently take over the desert burrows that Tortoises and other native species rely on for shelter.",
+                playerSpeed: 0.3, enemySpeed: 0.15, spawnRate: 1600, enemyHp: 2,
+                projectileColor: "#bef264", shape: "wide", generateBg: generateDesertBg
+            },
+            {
+                id: "otter",
+                name: "Sea Otter",
+                enemy: "Green Crab",
+                bgColor: "#064e3b", groundColor: "#047857",
+                playerColor: "#78350f", enemyColor: "#166534", itemColor: "#a855f7", 
+                goal: "Eat Urchins",
+                fact: "Invasive European Green Crabs aggressively outcompete native crabs and destroy essential coastal kelp and eelgrass habitats.",
+                playerSpeed: 0.45, enemySpeed: 0.1, spawnRate: 1800, enemyHp: 3,
+                projectileColor: "#e879f9", shape: "wide", generateBg: generateKelpBg
+            },
+            {
+                id: "platypus",
+                name: "Platypus",
+                enemy: "European Carp",
+                bgColor: "#0f766e", groundColor: "#115e59",
+                playerColor: "#78350f", enemyColor: "#d97706", itemColor: "#38bdf8", 
+                goal: "Eat Yabbies",
+                fact: "Invasive European Carp feed by vacuuming the riverbed, muddying the water and destroying the clear-water habitats platypuses need to hunt.",
+                playerSpeed: 0.4, enemySpeed: 0.1, spawnRate: 1800, enemyHp: 3,
+                projectileColor: "#bae6fd", shape: "wide", generateBg: generateRiverBg,
+                locked: true, price: 400
+            },
+            {
+                id: "kakapo",
+                name: "Kakapo",
+                enemy: "Stoat",
+                bgColor: "#14532d", groundColor: "#064e3b",
+                playerColor: "#65a30d", enemyColor: "#7f1d1d", itemColor: "#fbbf24", 
+                goal: "Gather Rimu Fruit",
+                fact: "The flightless, ground-dwelling Kakapo evolved with no mammalian predators, making them defenseless against introduced Stoats.",
+                playerSpeed: 0.45, enemySpeed: 0.15, spawnRate: 1600, enemyHp: 2,
+                projectileColor: "#fef08a", shape: "bird", generateBg: generateJungleBg,
+                locked: true, price: 600
+            },
+            {
+                id: "iguana",
+                name: "Marine Iguana",
+                enemy: "Feral Cat",
+                bgColor: "#1e293b", groundColor: "#0f172a",
+                playerColor: "#475569", enemyColor: "#ea580c", itemColor: "#4ade80", 
+                goal: "Eat Red Algae",
+                fact: "Feral cats introduced to the Galapagos hunt juvenile marine iguanas, severely threatening the population of this unique reptile.",
+                playerSpeed: 0.35, enemySpeed: 0.14, spawnRate: 1500, enemyHp: 3,
+                projectileColor: "#86efac", shape: "wide", generateBg: generateReefBg,
+                locked: true, price: 800
+            }
+        ];
+
+        function generateForestBg(w, h, ctx) {
+            ctx.fillStyle = "#0f172a"; ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = "#1e293b";
+            for(let i=0; i<40; i++) {
+                ctx.beginPath(); ctx.arc(Math.random()*w, Math.random()*h, Math.random()*50+20, 0, Math.PI*2); ctx.fill();
+            }
+        }
+        function generateMeadowBg(w, h, ctx) {
+            ctx.fillStyle = "#0284c7"; ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = "#38bdf8";
+            for(let i=0; i<15; i++) {
+                ctx.beginPath(); ctx.ellipse(Math.random()*w, Math.random()*h, Math.random()*80+40, Math.random()*20+10, 0, 0, Math.PI*2); ctx.fill();
+            }
+        }
+        function generateSwampBg(w, h, ctx) {
+            ctx.fillStyle = "#115e59"; ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = "#0f766e";
+            for(let i=0; i<60; i++) {
+                ctx.fillRect(Math.random()*w, Math.random()*h, Math.random()*120+50, Math.random()*15+5);
+            }
+        }
+        function generateCanalBg(w, h, ctx) {
+            ctx.fillStyle = "#1e3a8a"; ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = "#172554";
+            for(let i=0; i<50; i++) {
+                ctx.beginPath(); ctx.arc(Math.random()*w, Math.random()*h, Math.random()*20+5, 0, Math.PI*2); ctx.fill();
+            }
+        }
+        function generateReefBg(w, h, ctx) {
+            ctx.fillStyle = "#0369a1"; ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = "#075985";
+            for(let i=0; i<30; i++) {
+                ctx.beginPath(); let x = Math.random()*w; let y = Math.random()*h;
+                ctx.moveTo(x, y); ctx.lineTo(x+40, y-60); ctx.lineTo(x+80, y); ctx.fill();
+            }
+        }
+        function generateRiverBg(w, h, ctx) {
+            ctx.fillStyle = "#334155"; ctx.fillRect(0, 0, w, h);
+            ctx.strokeStyle = "#475569"; ctx.lineWidth = 3;
+            for(let i=0; i<50; i++) {
+                ctx.beginPath(); let x = Math.random()*w; let y = Math.random()*h;
+                ctx.moveTo(x, y); ctx.quadraticCurveTo(x+40, y+30, x+80, y); ctx.stroke();
+            }
+        }
+        function generateJungleBg(w, h, ctx) {
+            ctx.fillStyle = "#064e3b"; ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = "#022c22";
+            for(let i=0; i<70; i++) {
+                ctx.beginPath(); ctx.moveTo(Math.random()*w, Math.random()*h);
+                ctx.lineTo(Math.random()*w+50, Math.random()*h+120); ctx.lineTo(Math.random()*w-50, Math.random()*h+120); ctx.fill();
+            }
+        }
+        function generateGardenBg(w, h, ctx) {
+            ctx.fillStyle = "#4ade80"; ctx.fillRect(0, 0, w, h);
+            ctx.strokeStyle = "#22c55e"; ctx.lineWidth = 5;
+            for(let i=0; i<25; i++) {
+                ctx.beginPath(); let cx = Math.random()*w; let cy = Math.random()*h;
+                ctx.moveTo(cx, cy); ctx.lineTo(cx + (Math.random()-0.5)*250, cy + (Math.random()-0.5)*250); ctx.stroke();
+            }
+        }
+        function generateOutbackBg(w, h, ctx) {
+            ctx.fillStyle = "#78350f"; ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = "#92400e";
+            for(let i=0; i<40; i++) {
+                ctx.beginPath(); ctx.arc(Math.random()*w, Math.random()*h, Math.random()*40+10, 0, Math.PI*2); ctx.fill();
+            }
+        }
+        function generateDesertBg(w, h, ctx) {
+            ctx.fillStyle = "#b45309"; ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = "#d97706";
+            for(let i=0; i<30; i++) {
+                ctx.beginPath(); ctx.ellipse(Math.random()*w, Math.random()*h, Math.random()*60+20, Math.random()*20+10, Math.random()*Math.PI, 0, Math.PI*2); ctx.fill();
+            }
+        }
+        function generateKelpBg(w, h, ctx) {
+            ctx.fillStyle = "#064e3b"; ctx.fillRect(0, 0, w, h);
+            ctx.strokeStyle = "#047857"; ctx.lineWidth = 15;
+            for(let i=0; i<40; i++) {
+                ctx.beginPath(); let x = Math.random()*w; let y = Math.random()*h;
+                ctx.moveTo(x, y); ctx.quadraticCurveTo(x+30, y-100, x, y-200); ctx.stroke();
+            }
+        }
+
+        // Helper to draw eyes based on facing direction
+        function drawEyes(ctx, x, y, radius, faceX, faceY, isAngry) {
+            ctx.fillStyle = isAngry ? "#ff0000" : "#ffffff";
+            
+            // Default look forward if not moving
+            if(faceX === 0 && faceY === 0) faceX = 1; 
+
+            const eyeOffsetX = faceX * (radius * 0.4);
+            const eyeOffsetY = faceY * (radius * 0.4);
+            
+            // Perpendicular vector for spacing
+            const perpX = -faceY * (radius * 0.4);
+            const perpY = faceX * (radius * 0.4);
+
+            const eyeRadius = radius * 0.25;
+            const pupilRadius = radius * 0.12;
+
+            // Draw Whites/Red base
+            ctx.beginPath(); ctx.arc(x + eyeOffsetX + perpX, y + eyeOffsetY + perpY, eyeRadius, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + eyeOffsetX - perpX, y + eyeOffsetY - perpY, eyeRadius, 0, Math.PI*2); ctx.fill();
+
+            // Draw Pupils
+            ctx.fillStyle = "#000000";
+            const pupOffsetX = faceX * (eyeRadius * 0.3);
+            const pupOffsetY = faceY * (eyeRadius * 0.3);
+            ctx.beginPath(); ctx.arc(x + eyeOffsetX + perpX + pupOffsetX, y + eyeOffsetY + perpY + pupOffsetY, pupilRadius, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + eyeOffsetX - perpX + pupOffsetX, y + eyeOffsetY - perpY + pupOffsetY, pupilRadius, 0, Math.PI*2); ctx.fill();
+
+            if(isAngry) {
+                // Angry eyebrows
+                ctx.strokeStyle = "#000000"; ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x + eyeOffsetX + perpX - perpX*0.8, y + eyeOffsetY + perpY - faceY*eyeRadius*1.5);
+                ctx.lineTo(x + eyeOffsetX + perpX + perpX*0.8, y + eyeOffsetY + perpY + faceY*eyeRadius*0.5);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(x + eyeOffsetX - perpX + perpX*0.8, y + eyeOffsetY - perpY - faceY*eyeRadius*1.5);
+                ctx.lineTo(x + eyeOffsetX - perpX - perpX*0.8, y + eyeOffsetY - perpY + faceY*eyeRadius*0.5);
+                ctx.stroke();
+            }
+        }
+
+        class Player {
+            constructor(x, y) {
+                this.x = x; this.y = y;
+                this.radius = 18;
+                this.speed = config.playerSpeed;
+                this.vx = 0; this.vy = 0;
+                this.facingX = 1; this.facingY = 0;
+                this.attackCooldown = 0;
+                this.powerUpTime = 0; // Duration for Frenzy mode
+                this.shieldActive = false; // Protects from 1 hit
+                this.speedTime = 0; // Duration for Speed mode
+                this.magnetTime = 0; // Duration for Item Magnet
+                this.freezeTime = 0; // Duration for Enemy Freeze
+                this.invincibleTime = 0; // Duration for Invincibility
+                this.repelTime = 0; // Duration for Repel Aura
+                this.pierceTime = 0; // Duration for Piercing Shots
+                this.camoTime = 0; // Duration for Camouflage
+                this.poisonTime = 0; // Duration for Poison Trail
+                this.poisonTimer = 0; // Internal timer for trail drops
+                this.explosiveTime = 0; // Duration for Explosive Rounds
+                this.shrinkTime = 0; // Duration for Shrink
+                this.instantPowerUpTime = 0; // UI display timer for instant effects
+            }
+            update(dt) {
+                if (this.attackCooldown > 0) this.attackCooldown -= dt;
+                
+                let anyActive = false;
+                
+                if (this.powerUpTime > 0) { this.powerUpTime -= dt; anyActive = true; }
+                if (this.speedTime > 0) { this.speedTime -= dt; anyActive = true; }
+                if (this.magnetTime > 0) { this.magnetTime -= dt; anyActive = true; }
+                if (this.freezeTime > 0) { this.freezeTime -= dt; anyActive = true; }
+                if (this.invincibleTime > 0) { this.invincibleTime -= dt; anyActive = true; }
+                if (this.repelTime > 0) { this.repelTime -= dt; anyActive = true; }
+                if (this.pierceTime > 0) { this.pierceTime -= dt; anyActive = true; }
+                if (this.camoTime > 0) { this.camoTime -= dt; anyActive = true; }
+                if (this.explosiveTime > 0) { this.explosiveTime -= dt; anyActive = true; }
+                if (this.shrinkTime > 0) { this.shrinkTime -= dt; anyActive = true; }
+                if (this.instantPowerUpTime > 0) { this.instantPowerUpTime -= dt; anyActive = true; }
+                
+                if (this.poisonTime > 0) { 
+                    this.poisonTime -= dt; anyActive = true; 
+                    this.poisonTimer += dt;
+                    if (this.poisonTimer > 150) {
+                        poisonPuddles.push({x: this.x, y: this.y, life: 4000});
+                        this.poisonTimer = 0;
+                    }
+                }
+                
+                if (this.shieldActive) anyActive = true;
+
+                this.radius = this.shrinkTime > 0 ? 9 : 18;
+
+                if(!anyActive) {
+                    hudPanel.classList.remove('powerup-active');
+                    powerupIndicator.classList.add('hidden');
+                }
+
+                this.vx = 0; this.vy = 0;
+                if (keys.w || keys.ArrowUp) this.vy -= 1;
+                if (keys.s || keys.ArrowDown) this.vy += 1;
+                if (keys.a || keys.ArrowLeft) this.vx -= 1;
+                if (keys.d || keys.ArrowRight) this.vx += 1;
+
+                if (joystickVector.x !== 0 || joystickVector.y !== 0) {
+                    this.vx = joystickVector.x; this.vy = joystickVector.y;
+                }
+
+                if (this.vx !== 0 || this.vy !== 0) {
+                    const length = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                    this.vx /= length; this.vy /= length;
+                    this.facingX = this.vx; this.facingY = this.vy;
+                }
+
+                const currentSpeed = (this.speedTime > 0 || this.shrinkTime > 0) ? this.speed * 2 : this.speed;
+
+                this.x += this.vx * currentSpeed * dt;
+                this.y += this.vy * currentSpeed * dt;
+
+                this.x = Math.max(this.radius, Math.min(width - this.radius, this.x));
+                this.y = Math.max(this.radius, Math.min(height - this.radius, this.y));
+            }
+            draw(ctx) {
+                if (this.camoTime > 0) ctx.globalAlpha = 0.5;
+                
+                // Drop shadow & Skin overrides
+                let fillColor = config.playerColor;
+                ctx.shadowBlur = 10; ctx.shadowColor = "rgba(0,0,0,0.5)";
+                
+                if (equippedSkin === 'neon') { 
+                    fillColor = '#00ffff'; ctx.shadowColor = '#00ffff'; ctx.shadowBlur = 15; 
+                } else if (equippedSkin === 'gold') { 
+                    fillColor = '#ffd700'; ctx.shadowColor = '#d97706'; ctx.shadowBlur = 15; 
+                } else if (equippedSkin === 'void') { 
+                    fillColor = '#0f172a'; ctx.shadowColor = '#a855f7'; ctx.shadowBlur = 20; 
+                }
+                
+                ctx.fillStyle = fillColor;
+                ctx.beginPath();
+                
+                if (config.shape === "bird") {
+                    const angle = Math.atan2(this.facingY, this.facingX);
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    ctx.rotate(angle);
+                    ctx.moveTo(this.radius, 0);
+                    ctx.lineTo(-this.radius, this.radius * 0.8);
+                    ctx.lineTo(-this.radius*0.5, 0);
+                    ctx.lineTo(-this.radius, -this.radius * 0.8);
+                    ctx.fill();
+                    ctx.restore();
+                } else if (config.shape === "wide") {
+                    const angle = Math.atan2(this.facingY, this.facingX);
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    ctx.rotate(angle);
+                    ctx.ellipse(0, 0, this.radius + 4, this.radius - 2, 0, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.restore();
+                } else {
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.shadowBlur = 0; // reset
+
+                // If powerup active, draw aura
+                if(this.powerUpTime > 0) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius + 6 + Math.sin(performance.now()*0.01)*2, 0, Math.PI*2);
+                    ctx.strokeStyle = "rgba(250, 204, 21, 0.8)";
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                }
+                
+                // Speed trail aura
+                if(this.speedTime > 0) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius + 4 + Math.sin(performance.now()*0.02)*3, 0, Math.PI*2);
+                    ctx.strokeStyle = "rgba(74, 222, 128, 0.8)";
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                }
+
+                // Invincible Aura (Rainbow)
+                if(this.invincibleTime > 0) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius + 10 + Math.random()*5, 0, Math.PI*2);
+                    ctx.strokeStyle = `hsl(${(performance.now() * 0.5) % 360}, 100%, 70%)`;
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+                }
+
+                // Repel Forcefield
+                if (this.repelTime > 0) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, 150, 0, Math.PI*2);
+                    ctx.strokeStyle = "rgba(249, 115, 22, 0.3)";
+                    ctx.fillStyle = "rgba(249, 115, 22, 0.05)";
+                    ctx.lineWidth = 2;
+                    ctx.fill();
+                    ctx.stroke();
+                }
+
+                // Shield bubble
+                if(this.shieldActive) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius + 12, 0, Math.PI*2);
+                    ctx.strokeStyle = "rgba(6, 182, 212, 0.9)";
+                    ctx.fillStyle = "rgba(6, 182, 212, 0.2)";
+                    ctx.lineWidth = 4;
+                    ctx.fill();
+                    ctx.stroke();
+                }
+
+                drawEyes(ctx, this.x, this.y, this.radius, this.facingX, this.facingY, false);
+                
+                if (this.camoTime > 0) ctx.globalAlpha = 1.0;
+            }
+        }
+
+        class Baby {
+            constructor(x, y) {
+                this.x = x; this.y = y;
+                this.radius = 10;
+                this.originX = x; this.originY = y;
+                this.vx = (Math.random() - 0.5) * 0.1;
+                this.vy = (Math.random() - 0.5) * 0.1;
+                this.facingX = 1; this.facingY = 0;
+                this.shieldActive = false;
+                this.age = 0;
+                this.isAdult = false;
+                this.attackCooldown = 0;
+                this.reproduceCooldown = 15000;
+            }
+            update(dt, enemies) {
+                this.age += dt;
+                
+                if (!this.isAdult && this.age > 20000) { // Grow up after 20 seconds
+                    this.isAdult = true;
+                    this.radius = 16; // Grown up size
+                    this.reproduceCooldown = 5000; // Fast first reproduction
+                    createParticles(this.x, this.y, "#fbbf24", 30);
+                }
+                
+                if (this.isAdult) {
+                    this.originX = player.x;
+                    this.originY = player.y;
+                }
+                
+                this.x += this.vx * dt; this.y += this.vy * dt;
+                const dx = this.x - this.originX; const dy = this.y - this.originY;
+
+                // Active separation for adults to make them spread out more
+                if (this.isAdult && typeof babies !== 'undefined') {
+                    let sepX = 0; let sepY = 0;
+                    babies.forEach(other => {
+                        if (other !== this && other.isAdult) {
+                            let diffX = this.x - other.x; let diffY = this.y - other.y;
+                            let distSq = diffX*diffX + diffY*diffY;
+                            if (distSq > 0 && distSq < 90000) { // Keep them ~300px apart
+                                let dist = Math.sqrt(distSq);
+                                sepX += (diffX / dist) * (1 - dist/300); // Stronger push when closer
+                            }
+                        }
+                    });
+                    this.vx += sepX * 0.005 * dt;
+                    this.vy += sepY * 0.005 * dt;
+                }
+
+                // keep close to spawn location, adults roam much wider and follow player
+                const roamDistSq = this.isAdult ? 400000 : 900; // Increased radius to ~632px
+                if (dx*dx + dy*dy > roamDistSq) { 
+                    this.vx += (this.originX - this.x) * 0.0005 * dt;
+                    this.vy += (this.originY - this.y) * 0.0005 * dt;
+                }
+                // add random jitter (adults are more erratic)
+                const jitter = this.isAdult ? 0.06 : 0.01;
+                this.vx += (Math.random() - 0.5) * jitter * dt;
+                this.vy += (Math.random() - 0.5) * jitter * dt;
+                
+                // clamp speed
+                const maxSpeed = this.isAdult ? 0.20 : 0.08; // slightly faster so they can spread effectively
+                const speed = Math.sqrt(this.vx*this.vx + this.vy*this.vy);
+                if (speed > maxSpeed) {
+                    this.vx = (this.vx/speed) * maxSpeed;
+                    this.vy = (this.vy/speed) * maxSpeed;
+                }
+
+                if (speed > 0.01) {
+                    this.facingX = this.vx/speed; this.facingY = this.vy/speed;
+                }
+                
+                // Adult capabilities
+                if (this.isAdult) {
+                    // Auto-fight mechanics
+                    if (this.attackCooldown > 0) this.attackCooldown -= dt;
+                    if (this.attackCooldown <= 0 && enemies && enemies.length > 0) {
+                        let target = null; let minDistSq = Infinity;
+                        enemies.forEach(e => {
+                            let dSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y);
+                            if (dSq < minDistSq) { minDistSq = dSq; target = e; }
+                        });
+                        if (minDistSq < 90000) { // 300px range
+                            let tdx = target.x - this.x; let tdy = target.y - this.y;
+                            let len = Math.sqrt(tdx*tdx + tdy*tdy);
+                            // Shoot projectile (nerfed: slower projectile speed)
+                            projectiles.push(new Projectile(this.x, this.y, (tdx/len)*0.8, (tdy/len)*0.8, config.projectileColor, false, false, false));
+                            this.attackCooldown = Math.max(500, 3500 - (upgrades.babyShot * 525)); // 15% faster per upgrade level
+                            Sound.play('shoot');
+                        }
+                    }
+                    
+                    // Reproduce timer
+                    if (this.reproduceCooldown > 0) this.reproduceCooldown -= dt;
+                }
+            }
+            draw(ctx) {
+                let fillColor = config.playerColor;
+                ctx.shadowBlur = 5; ctx.shadowColor = "rgba(0,0,0,0.5)";
+                
+                if (equippedSkin === 'neon') { fillColor = '#00ffff'; ctx.shadowColor = '#00ffff'; ctx.shadowBlur = 10; }
+                else if (equippedSkin === 'gold') { fillColor = '#ffd700'; ctx.shadowColor = '#d97706'; ctx.shadowBlur = 10; }
+                else if (equippedSkin === 'void') { fillColor = '#0f172a'; ctx.shadowColor = '#a855f7'; ctx.shadowBlur = 15; }
+
+                ctx.fillStyle = fillColor;
+                ctx.beginPath();
+                if (config.shape === "bird") {
+                    const angle = Math.atan2(this.facingY, this.facingX);
+                    ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(angle);
+                    ctx.moveTo(this.radius, 0); ctx.lineTo(-this.radius, this.radius * 0.8);
+                    ctx.lineTo(-this.radius*0.5, 0); ctx.lineTo(-this.radius, -this.radius * 0.8);
+                    ctx.fill(); ctx.restore();
+                } else if (config.shape === "wide") {
+                    const angle = Math.atan2(this.facingY, this.facingX);
+                    ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(angle);
+                    ctx.ellipse(0, 0, this.radius + 2, this.radius - 1, 0, 0, Math.PI*2);
+                    ctx.fill(); ctx.restore();
+                } else {
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
+                }
+                ctx.shadowBlur = 0;
+                
+                if (this.shieldActive) {
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 6, 0, Math.PI*2);
+                    ctx.strokeStyle = "#bae6fd"; ctx.fillStyle = "rgba(186, 230, 253, 0.2)";
+                    ctx.lineWidth = 2; ctx.fill(); ctx.stroke();
+                }
+                
+                drawEyes(ctx, this.x, this.y, this.radius, this.facingX, this.facingY, false);
+            }
+        }
+
+        class Enemy {
+            constructor(x, y) {
+                this.x = x; this.y = y;
+                this.radius = 20;
+                
+                // Progressive difficulty scaling based on current score
+                const speedScale = 1 + (score * 0.001); // +10% speed per 100 points (much slower scaling)
+                const hpScale = Math.floor(score / 150); // +1 max HP per 150 points (was 80)
+
+                this.speed = config.enemySpeed * diffSettings[currentDifficulty].speedMult * speedScale;
+                this.maxHp = Math.max(1, Math.floor(config.enemyHp * diffSettings[currentDifficulty].hpMult)) + hpScale;
+                this.hp = this.maxHp;
+                this.flashTimer = 0;
+                this.facingX = 0; this.facingY = 0;
+            }
+            update(dt, targetX, targetY, otherEnemies) {
+                if(this.flashTimer > 0) this.flashTimer -= dt;
+
+                let separationX = 0; let separationY = 0; let count = 0;
+
+                if (otherEnemies) {
+                    for (let other of otherEnemies) {
+                        if (other !== this) {
+                            const dx = this.x - other.x; const dy = this.y - other.y;
+                            const distSq = dx * dx + dy * dy;
+                            const minSeparationSq = 1600; 
+                            if (distSq === 0) {
+                                separationX += (Math.random() - 0.5); separationY += (Math.random() - 0.5); count++;
+                            } else if (distSq < minSeparationSq) {
+                                const dist = Math.sqrt(distSq);
+                                separationX += (dx / dist); separationY += (dy / dist); count++;
+                            }
+                        }
+                    }
+                }
+
+                const dx = targetX - this.x; const dy = targetY - this.y;
+                const distToPlayer = Math.sqrt(dx * dx + dy * dy);
+                let moveX = 0; let moveY = 0;
+
+                if (distToPlayer > 0) { moveX = (dx / distToPlayer); moveY = (dy / distToPlayer); }
+
+                if (count > 0) {
+                    separationX /= count; separationY /= count;
+                    moveX = moveX * 0.4 + separationX * 1.6; moveY = moveY * 0.4 + separationY * 1.6;
+                    const blendedDist = Math.sqrt(moveX * moveX + moveY * moveY);
+                    if (blendedDist > 0) { moveX /= blendedDist; moveY /= blendedDist; }
+                }
+
+                this.facingX = moveX; this.facingY = moveY;
+                this.x += moveX * this.speed * dt;
+                this.y += moveY * this.speed * dt;
+            }
+            draw(ctx) {
+                const angle = Math.atan2(this.facingY, this.facingX);
+                
+                // Draw Insect Legs
+                ctx.strokeStyle = this.flashTimer > 0 ? "#ffffff" : "#000000";
+                ctx.lineWidth = 2;
+                ctx.lineCap = "round";
+                for (let i = -1; i <= 1; i++) {
+                    // Left legs
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(this.x + Math.cos(angle - Math.PI/2 + i*0.5) * this.radius * 1.5,
+                               this.y + Math.sin(angle - Math.PI/2 + i*0.5) * this.radius * 1.5);
+                    ctx.stroke();
+                    // Right legs
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(this.x + Math.cos(angle + Math.PI/2 + i*0.5) * this.radius * 1.5,
+                               this.y + Math.sin(angle + Math.PI/2 + i*0.5) * this.radius * 1.5);
+                    ctx.stroke();
+                }
+
+                ctx.shadowBlur = 8; ctx.shadowColor = "rgba(0,0,0,0.6)";
+                ctx.fillStyle = this.flashTimer > 0 ? "#ffffff" : config.enemyColor;
+                
+                // Draw Bug Body (Thorax/Abdomen)
+                ctx.beginPath();
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(angle);
+                ctx.ellipse(0, 0, this.radius + 4, this.radius - 2, 0, 0, Math.PI*2);
+                ctx.fill();
+                ctx.restore();
+                ctx.shadowBlur = 0;
+
+                drawEyes(ctx, this.x, this.y, this.radius, this.facingX, this.facingY, true);
+
+                if (this.hp < this.maxHp) {
+                    ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(this.x - 12, this.y - 30, 24, 6);
+                    ctx.fillStyle = "#ef4444"; ctx.fillRect(this.x - 11, this.y - 29, 22 * (this.hp / this.maxHp), 4);
+                }
+            }
+        }
+
+        class Projectile {
+            constructor(x, y, vx, vy, color, isPowered, isPiercing = false, isExplosive = false) {
+                this.x = x; this.y = y;
+                this.vx = vx; this.vy = vy;
+                this.radius = isPowered ? 8 : 6;
+                this.color = isPowered ? "#fef08a" : color;
+                this.life = 1500; 
+                this.isPowered = isPowered;
+                this.isPiercing = isPiercing;
+                this.isExplosive = isExplosive;
+                this.hitList = new Set();
+            }
+            update(dt) { this.x += this.vx * dt; this.y += this.vy * dt; this.life -= dt; }
+            draw(ctx) {
+                if(this.isPowered) { ctx.shadowBlur = 10; ctx.shadowColor = this.color; }
+                ctx.fillStyle = this.color;
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        class Item {
+            constructor(x, y) {
+                this.x = x; this.y = y;
+                this.radius = 12;
+                this.bobOffset = Math.random() * Math.PI * 2;
+            }
+            draw(ctx, time) {
+                const bob = Math.sin(time * 0.005 + this.bobOffset) * 6;
+                ctx.shadowBlur = 15; ctx.shadowColor = config.itemColor;
+                ctx.fillStyle = config.itemColor;
+                ctx.beginPath(); ctx.arc(this.x, this.y + bob, this.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.lineWidth = 2; ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        class PowerUp {
+            constructor(x, y) {
+                this.x = x; this.y = y;
+                this.radius = 15;
+                this.bobOffset = Math.random() * Math.PI * 2;
+                
+                // Rarity System (Higher weight = more common)
+                const types = [
+                    { type: 'speed', color: '#4ade80', weight: 25 },   // Common (Lime)
+                    { type: 'shield', color: '#06b6d4', weight: 20 },  // Common (Cyan)
+                    { type: 'magnet', color: '#a855f7', weight: 12 },  // Uncommon (Purple)
+                    { type: 'clone', color: '#f472b6', weight: 10 },   // Rare (Pink)
+                    { type: 'frenzy', color: '#facc15', weight: 8 },   // Rare (Gold)
+                    { type: 'feast', color: '#15803d', weight: 8 },    // Rare (Dark Green)
+                    { type: 'repel', color: '#f97316', weight: 7 },    // Rare (Orange)
+                    { type: 'freeze', color: '#93c5fd', weight: 5 },   // Epic (Ice Blue)
+                    { type: 'invincible', color: '#ffffff', weight: 3 },// Epic (White)
+                    { type: 'nuke', color: '#ef4444', weight: 2 },     // Legendary (Red)
+                    { type: 'pierce', color: '#818cf8', weight: 10 },  // Uncommon (Indigo)
+                    { type: 'camo', color: '#d1d5db', weight: 8 },     // Rare (Gray)
+                    { type: 'decoy', color: '#ca8a04', weight: 10 },   // Uncommon (Brown)
+                    { type: 'poison', color: '#a3e635', weight: 8 },   // Rare (Lime)
+                    { type: 'turret', color: '#e879f9', weight: 5 },   // Epic (Fuchsia)
+                    { type: 'jackpot', color: '#fde047', weight: 8 },  // Rare (Yellow)
+                    { type: 'explosive', color: '#fb7185', weight: 6 },// Epic (Crimson)
+                    { type: 'babyshield', color: '#bae6fd', weight: 10 },// Uncommon (Light Blue)
+                    { type: 'vortex', color: '#c084fc', weight: 4 },   // Epic (Purple)
+                    { type: 'shrink', color: '#5eead4', weight: 8 }    // Rare (Teal)
+                ];
+                
+                let totalWeight = 0;
+                for(let t of types) totalWeight += t.weight;
+                
+                let random = Math.random() * totalWeight;
+                let selected = types[0];
+                for (let t of types) {
+                    if (random < t.weight) {
+                        selected = t;
+                        break;
+                    }
+                    random -= t.weight;
+                }
+                
+                this.type = selected.type;
+                this.color = selected.color;
+            }
+            draw(ctx, time) {
+                const bob = Math.sin(time * 0.008 + this.bobOffset) * 8;
+                // Glowing orb based on type
+                ctx.shadowBlur = 20 + Math.sin(time*0.01)*10; 
+                ctx.shadowColor = this.color;
+                
+                const grad = ctx.createRadialGradient(this.x, this.y+bob, 0, this.x, this.y+bob, this.radius);
+                grad.addColorStop(0, "#ffffff");
+                grad.addColorStop(0.5, this.color);
+                grad.addColorStop(1, this.color);
+
+                ctx.fillStyle = grad;
+                ctx.beginPath(); ctx.arc(this.x, this.y + bob, this.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x; this.y = y; this.color = color;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 0.3 + 0.1;
+                this.vx = Math.cos(angle) * speed; this.vy = Math.sin(angle) * speed;
+                this.life = 1.0; this.decay = Math.random() * 0.02 + 0.01;
+                this.size = Math.random() * 5 + 2;
+            }
+            update(dt) { this.x += this.vx * dt; this.y += this.vy * dt; this.life -= this.decay * (dt/16); }
+            draw(ctx) {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function getHighScore(levelId) { return localStorage.getItem(`highscore_${levelId}`) || 0; }
+        function saveHighScore(levelId, newScore) {
+            const current = getHighScore(levelId);
+            if(newScore > current) localStorage.setItem(`highscore_${levelId}`, newScore);
+        }
+
+        function updateHealthUI() {
+            document.getElementById('hud-health-text').innerText = Math.ceil(health);
+            const pct = Math.max(0, (health / MAX_HEALTH) * 100);
+            hudHealthBar.style.width = `${pct}%`;
+            
+            if (health <= 30) {
+                hudHealthBar.className = "h-full bg-red-600 transition-all duration-200";
+                document.getElementById('hud-health-text').classList.add('animate-pulse', 'text-red-500');
+            } else {
+                hudHealthBar.className = "h-full bg-rose-500 transition-all duration-200";
+                document.getElementById('hud-health-text').classList.remove('animate-pulse', 'text-red-500');
+            }
+        }
+
+        function updateHungerUI() {
+            document.getElementById('hud-hunger-text').innerText = Math.ceil(hunger) + "%";
+            const pct = Math.max(0, (hunger / MAX_HUNGER) * 100);
+            hudHungerBar.style.width = `${pct}%`;
+            
+            if (hunger <= 25) {
+                hudHungerBar.className = "h-full bg-red-600 transition-all duration-200";
+                document.getElementById('hud-hunger-text').classList.add('animate-pulse', 'text-red-500');
+            } else if (hunger <= 50) {
+                hudHungerBar.className = "h-full bg-orange-500 transition-all duration-200";
+                document.getElementById('hud-hunger-text').classList.remove('animate-pulse', 'text-red-500');
+                document.getElementById('hud-hunger-text').classList.add('text-orange-400');
+            } else {
+                hudHungerBar.className = "h-full bg-green-500 transition-all duration-200";
+                document.getElementById('hud-hunger-text').classList.remove('animate-pulse', 'text-red-500', 'text-orange-400');
+                document.getElementById('hud-hunger-text').classList.add('text-green-400');
+            }
+        }
+
+        function initLevelSelect() {
+            levelList.innerHTML = '';
+            levels.forEach((lvl, index) => {
+                if(lvl.locked && !unlockedSpecies.includes(lvl.id)) return; // Hide locked species from main menu
+                
+                const highscore = getHighScore(lvl.id);
+                const card = document.createElement('div');
+                card.className = "glass-panel hover:bg-slate-800/80 rounded-2xl p-5 cursor-pointer transition-all duration-200 transform hover:-translate-y-2 hover:shadow-[0_10px_20px_rgba(0,0,0,0.5)] flex flex-col justify-between border-t border-white/10 relative overflow-hidden group";
+                card.onclick = () => startGame(index);
+                
+                // Add subtle color glow on hover matching player color
+                card.style.setProperty('--hover-glow', lvl.playerColor);
+                
+                card.innerHTML = `
+                    <div class="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300" style="background: radial-gradient(circle at center, ${lvl.playerColor} 0%, transparent 70%);"></div>
+                    <div class="relative z-10">
+                        <div class="flex justify-between items-start mb-1">
+                            <h3 class="text-xl font-black text-white drop-shadow">${lvl.name}</h3>
+                        </div>
+                        <div class="flex justify-between items-center mb-4">
+                            <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">NATIVE</span>
+                            <span class="text-[10px] text-gray-400 font-bold uppercase">VS</span>
+                            <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30">INVASIVE</span>
+                        </div>
+                        <h4 class="text-lg font-bold text-gray-300 mb-3 text-right">${lvl.enemy}</h4>
+                    </div>
+                    
+                    <div class="relative z-10 mt-auto">
+                        <div class="flex justify-between items-center text-xs mb-2">
+                            <span class="text-gray-400">High Score: <span class="text-yellow-400 font-bold">${highscore}</span></span>
+                        </div>
+                        <div class="h-3 w-full rounded-full overflow-hidden flex shadow-inner border border-white/5">
+                            <div style="background-color: ${lvl.playerColor}; width: 50%;"></div>
+                            <div style="background-color: ${lvl.enemyColor}; width: 50%;"></div>
+                        </div>
+                    </div>
+                `;
+                levelList.appendChild(card);
+            });
+        }
+
+        function triggerShake(magnitude, duration) {
+            shakeMagnitude = magnitude;
+            shakeTime = duration;
+        }
+
+        function updateAmmoUI() {
+            document.getElementById('hud-ammo-text').innerText = ammo;
+            const pct = Math.min(100, Math.max(0, (ammo / MAX_AMMO) * 100));
+            hudAmmoBar.style.width = `${pct}%`;
+            if (ammo <= 50) hudAmmoBar.className = "h-full bg-red-500 transition-all duration-200";
+            else if (ammo <= 200) hudAmmoBar.className = "h-full bg-yellow-500 transition-all duration-200";
+            else hudAmmoBar.className = "h-full bg-blue-500 transition-all duration-200";
+        }
+
+        function resize() {
+            width = window.innerWidth; height = window.innerHeight;
+            canvas.width = width; canvas.height = height;
+            bgCanvas.width = width; bgCanvas.height = height;
+            if(config) config.generateBg(width, height, bgCtx);
+        }
+        window.addEventListener('resize', resize);
+
+        window.addEventListener('keydown', e => {
+            if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+            if (e.key === ' ' && isPlaying) { e.preventDefault(); tryShoot(); }
+        });
+        window.addEventListener('keyup', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
+
+        const joystick = document.getElementById('joystick');
+        const stick = document.getElementById('stick');
+        const btnShoot = document.getElementById('btn-shoot');
+
+        let stickActive = false; let baseRect;
+        let joystickTouchId = null;
+        window.isMobileFiring = false;
+
+        // Joystick Multi-Touch tracking
+        joystick.addEventListener('touchstart', (e) => { 
+            e.preventDefault(); 
+            for(let i=0; i<e.changedTouches.length; i++) {
+                if(joystickTouchId === null) {
+                    joystickTouchId = e.changedTouches[i].identifier;
+                    stickActive = true; 
+                    baseRect = joystick.getBoundingClientRect(); 
+                    updateStickPosition(e.changedTouches[i]); 
+                    break;
+                }
+            }
+        }, {passive: false});
+
+        joystick.addEventListener('touchmove', (e) => { 
+            e.preventDefault(); 
+            if (stickActive) { 
+                for(let i=0; i<e.changedTouches.length; i++) {
+                    if(e.changedTouches[i].identifier === joystickTouchId) {
+                        updateStickPosition(e.changedTouches[i]); 
+                        break;
+                    }
+                }
+            } 
+        }, {passive: false});
+
+        joystick.addEventListener('touchend', (e) => { 
+            e.preventDefault();
+            for(let i=0; i<e.changedTouches.length; i++) {
+                if(e.changedTouches[i].identifier === joystickTouchId) {
+                    joystickTouchId = null;
+                    stickActive = false; 
+                    stick.style.transform = `translate(-50%, -50%)`; 
+                    joystickVector = { x: 0, y: 0 }; 
+                    break;
+                }
+            }
+        }, {passive: false});
+
+        joystick.addEventListener('touchcancel', (e) => { 
+            e.preventDefault();
+            for(let i=0; i<e.changedTouches.length; i++) {
+                if(e.changedTouches[i].identifier === joystickTouchId) {
+                    joystickTouchId = null;
+                    stickActive = false; 
+                    stick.style.transform = `translate(-50%, -50%)`; 
+                    joystickVector = { x: 0, y: 0 }; 
+                    break;
+                }
+            }
+        }, {passive: false});
+
+        // Fire Button Hold-to-Shoot
+        btnShoot.addEventListener('touchstart', (e) => { e.preventDefault(); window.isMobileFiring = true; btnShoot.style.transform = "scale(0.9)"; tryShoot(); }, {passive: false});
+        btnShoot.addEventListener('touchend', (e) => { e.preventDefault(); window.isMobileFiring = false; btnShoot.style.transform = "scale(1)"; }, {passive: false});
+        btnShoot.addEventListener('touchcancel', (e) => { e.preventDefault(); window.isMobileFiring = false; btnShoot.style.transform = "scale(1)"; }, {passive: false});
+
+        function updateStickPosition(touch) {
+            const centerX = baseRect.left + baseRect.width / 2; const centerY = baseRect.top + baseRect.height / 2;
+            const dx = touch.clientX - centerX; const dy = touch.clientY - centerY;
+            const maxDist = baseRect.width / 2; let dist = Math.sqrt(dx * dx + dy * dy);
+            let drawX = dx; let drawY = dy;
+
+            if (dist > maxDist) { drawX = (dx / dist) * maxDist; drawY = (dy / dist) * maxDist; dist = maxDist; }
+            stick.style.transform = `translate(calc(-50% + ${drawX}px), calc(-50% + ${drawY}px))`;
+            
+            joystickVector.x = dx / maxDist; joystickVector.y = dy / maxDist;
+            const vecLength = Math.sqrt(joystickVector.x*joystickVector.x + joystickVector.y*joystickVector.y);
+            if(vecLength > 1) { joystickVector.x /= vecLength; joystickVector.y /= vecLength; }
+        }
+
+        function triggerPowerupUI(text, className) {
+            hudPanel.classList.add('powerup-active');
+            powerupIndicator.className = `mt-3 text-center text-xs font-bold py-1 px-2 rounded uppercase tracking-widest animate-pulse ${className}`;
+            powerupIndicator.innerText = text;
+            powerupIndicator.classList.remove('hidden');
+        }
+
+        function tryShoot() {
+            if (!isPlaying || !player || player.attackCooldown > 0) return;
+            if (ammo <= 0 && player.powerUpTime <= 0) {
+                // visual feedback for empty ammo
+                hudAmmoBar.parentElement.classList.add('animate-pulse');
+                setTimeout(()=>hudAmmoBar.parentElement.classList.remove('animate-pulse'), 500);
+                return;
+            }
+            
+            let targetX = player.facingX || 1; let targetY = player.facingY || 0;
+            let nearestEnemy = null; let minDistance = Infinity;
+
+            for (const enemy of enemies) {
+                const dx = enemy.x - player.x; const dy = enemy.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < minDistance) { minDistance = dist; nearestEnemy = enemy; }
+            }
+
+            if (nearestEnemy && minDistance < 600) { 
+                const dx = nearestEnemy.x - player.x; const dy = nearestEnemy.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                targetX = dx / dist; targetY = dy / dist;
+            } else if (player.vx !== 0 || player.vy !== 0) {
+                 const speed = Math.sqrt(player.vx*player.vx + player.vy*player.vy);
+                 targetX = player.vx / speed; targetY = player.vy / speed;
+            }
+
+            const isFrenzy = player.powerUpTime > 0;
+            const baseSpeed = player.speed * 2.8;
+            const isPierce = player.pierceTime > 0;
+            const isExplosive = player.explosiveTime > 0;
+            
+            // Fire pattern
+            if (isFrenzy) {
+                // 3-way spread
+                const angle = Math.atan2(targetY, targetX);
+                const spread = 0.25; // radians
+                for(let i = -1; i <= 1; i++) {
+                    let vx = Math.cos(angle + i*spread) * baseSpeed + player.vx * 0.2;
+                    let vy = Math.sin(angle + i*spread) * baseSpeed + player.vy * 0.2;
+                    projectiles.push(new Projectile(player.x, player.y, vx, vy, config.projectileColor, true, isPierce, isExplosive));
+                }
+                player.attackCooldown = 80; // Super fast
+            } else {
+                let projVx = targetX * baseSpeed + player.vx * 0.2;
+                let projVy = targetY * baseSpeed + player.vy * 0.2;
+                projectiles.push(new Projectile(player.x, player.y, projVx, projVy, config.projectileColor, false, isPierce, isExplosive));
+                player.attackCooldown = 100; // Much faster base fire rate
+                ammo--;
+                updateAmmoUI();
+            }
+            
+            // Recoil
+            player.x -= targetX * (isFrenzy ? 5 : 3);
+            player.y -= targetY * (isFrenzy ? 5 : 3);
+            
+            Sound.play('shoot');
+        }
+
+        function createParticles(x, y, color, count=10) {
+            for(let i=0; i<count; i++) particles.push(new Particle(x, y, color));
+        }
+
+        function spawnEnemy() {
+            let ex, ey;
+            if (Math.random() > 0.5) {
+                ex = Math.random() > 0.5 ? -30 : width + 30; ey = Math.random() * height;
+            } else {
+                ex = Math.random() * width; ey = Math.random() > 0.5 ? -30 : height + 30;
+            }
+            enemies.push(new Enemy(ex, ey));
+        }
+
+        function spawnItem() {
+            const padding = 60;
+            items.push(new Item(padding + Math.random() * (width - padding * 2), padding + Math.random() * (height - padding * 2)));
+        }
+        
+        function spawnPowerUp() {
+            const padding = 60;
+            powerups.push(new PowerUp(padding + Math.random() * (width - padding * 2), padding + Math.random() * (height - padding * 2)));
+        }
+
+        async function startGame(levelIndex) {
+            await Sound.init();
+            
+            config = levels[levelIndex];
+            resize();
+            
+            player = new Player(width / 2, height / 2);
+            enemies = []; items = []; powerups = []; particles = []; projectiles = []; babies = [];
+            decoys = []; turrets = []; vortexes = []; poisonPuddles = [];
+            
+            for(let i=0; i<3; i++) {
+                babies.push(new Baby(width/2 + (Math.random()-0.5)*60, height/2 + (Math.random()-0.5)*60));
+            }
+
+            // Apply Upgrades
+            MAX_HEALTH = 100 + (upgrades.health * 25);
+            MAX_HUNGER = 100 + (upgrades.hunger * 25);
+            
+            score = 0; 
+            ammo = 200 + (upgrades.ammo * 50); 
+            hunger = MAX_HUNGER; 
+            health = MAX_HEALTH; 
+            babyRespawnTimer = 0;
+            lastTime = performance.now(); lastSpawnTime = lastTime;
+            isPlaying = true;
+            
+            document.getElementById('hud-title').innerText = config.name;
+            document.getElementById('hud-goal').innerText = config.goal;
+            document.getElementById('hud-score').innerText = score;
+            updateAmmoUI();
+            updateHungerUI();
+            updateHealthUI();
+            
+            hudPanel.classList.remove('powerup-active');
+            powerupIndicator.classList.add('hidden');
+            
+            startScreen.classList.add('hidden'); gameOverScreen.classList.add('hidden');
+            hud.classList.remove('hidden');
+            
+            for(let i=0; i<5; i++) spawnItem();
+
+            if (animationId) cancelAnimationFrame(animationId);
+            gameLoop(lastTime);
+        }
+
+        function gameOver(reason) {
+            isPlaying = false;
+            Sound.play('gameover');
+            hud.classList.add('hidden');
+            gameOverScreen.classList.remove('hidden');
+            
+            const goTitle = document.getElementById('go-title');
+            if(reason === 'starvation') {
+                goTitle.innerHTML = "STARVED<br>TO DEATH";
+                document.getElementById('go-fact').innerText = "You failed to gather enough resources to survive. " + config.fact;
+            } else {
+                goTitle.innerHTML = "ECOSYSTEM<br>COLLAPSED";
+                document.getElementById('go-fact').innerText = config.fact;
+            }
+            
+            // Number counter animation for score
+            let dispScore = 0;
+            const goScoreEl = document.getElementById('go-score');
+            const inc = Math.max(1, Math.floor(score / 50));
+            const timer = setInterval(() => {
+                dispScore += inc;
+                if(dispScore >= score) { dispScore = score; clearInterval(timer); }
+                goScoreEl.innerText = dispScore;
+            }, 20);
+
+            saveHighScore(config.id, score);
+            document.getElementById('go-highscore').innerText = getHighScore(config.id);
+            
+            // Calculate and award coins based on score and difficulty
+            const coinsEarned = Math.floor((score / 5) * diffSettings[currentDifficulty].coinMult);
+            coins += coinsEarned;
+            
+            // Update Stats for Quests
+            stats.totalScore += score;
+            stats.matchCoins += coinsEarned;
+            if (score > stats.highestScore) stats.highestScore = score;
+            
+            saveGameData();
+            document.getElementById('go-coins').innerText = coinsEarned;
+            
+            initLevelSelect(); // Refresh high scores on menu
+        }
+
+        document.getElementById('btn-restart').addEventListener('click', () => {
+            gameOverScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+        });
+
+        function update(dt, time) {
+            if (!isPlaying) return;
+
+            // Enable continuous firing when spacebar or mobile fire button is held down
+            if (keys[' '] || window.isMobileFiring) {
+                tryShoot();
+            }
+
+            player.update(dt);
+            
+            let currentBabies = babies.filter(b => !b.isAdult).length;
+            let currentAdults = babies.filter(b => b.isAdult).length;
+            
+            babies.forEach(b => {
+                b.update(dt, enemies);
+                
+                // Adults reproduce up to limit of 3 babies
+                if (b.isAdult && b.reproduceCooldown <= 0 && currentBabies < 3) {
+                    let newBaby = new Baby(b.x + (Math.random()-0.5)*30, b.y + (Math.random()-0.5)*30);
+                    babies.push(newBaby);
+                    createParticles(newBaby.x, newBaby.y, config.playerColor, 20);
+                    b.reproduceCooldown = 25000; // Nerfed: 25 seconds cooldown
+                    currentBabies++;
+                }
+            });
+            
+            // New entities updates
+            for (let i = decoys.length - 1; i >= 0; i--) {
+                decoys[i].life -= dt;
+                if (decoys[i].life <= 0) decoys.splice(i, 1);
+            }
+            for (let i = vortexes.length - 1; i >= 0; i--) {
+                let v = vortexes[i]; v.life -= dt;
+                if (v.life <= 0) { vortexes.splice(i, 1); continue; }
+                enemies.forEach(e => {
+                    let dx = v.x - e.x; let dy = v.y - e.y; let distSq = dx*dx + dy*dy;
+                    if (distSq < 90000) { 
+                        let dist = Math.sqrt(distSq);
+                        e.x += (dx/dist) * 0.4 * dt; e.y += (dy/dist) * 0.4 * dt;
+                        if (distSq < 900) e.hp -= 5; // Crush inside vortex
+                    }
+                });
+            }
+            for (let i = poisonPuddles.length - 1; i >= 0; i--) {
+                let p = poisonPuddles[i]; p.life -= dt;
+                if (p.life <= 0) { poisonPuddles.splice(i, 1); continue; }
+                enemies.forEach(e => {
+                    let dx = p.x - e.x; let dy = p.y - e.y;
+                    if (dx*dx + dy*dy < 1600) { e.hp -= 0.03 * dt; e.flashTimer = 50; }
+                });
+            }
+            for(let i = turrets.length - 1; i >= 0; i--) {
+                let t = turrets[i]; t.life -= dt;
+                if (t.life <= 0) { turrets.splice(i, 1); continue; }
+                t.x += (player.x + Math.cos(time*0.003 + i)*60 - t.x) * 0.05 * dt;
+                t.y += (player.y + Math.sin(time*0.003 + i)*60 - t.y) * 0.05 * dt;
+                t.cooldown -= dt;
+                if (t.cooldown <= 0 && enemies.length > 0) {
+                    let target = enemies[0]; let dist = Infinity;
+                    enemies.forEach(e => {
+                        let d = (e.x-t.x)*(e.x-t.x) + (e.y-t.y)*(e.y-t.y);
+                        if (d < dist) { dist = d; target = e; }
+                    });
+                    if (dist < 250000) { // range
+                        let dx = target.x - t.x; let dy = target.y - t.y; let len = Math.sqrt(dx*dx + dy*dy);
+                        projectiles.push(new Projectile(t.x, t.y, (dx/len)*4, (dy/len)*4, "#e879f9", false, false, false));
+                        t.cooldown = 400; Sound.play('shoot');
+                    }
+                }
+            }
+            
+            // Passive Baby Respawn (only if no adults are alive to breed)
+            if (currentBabies < 3 && currentAdults === 0) {
+                babyRespawnTimer += dt;
+                if (babyRespawnTimer > 10000) { // Respawn every 10 seconds
+                    let newBaby = new Baby(width/2 + (Math.random()-0.5)*60, height/2 + (Math.random()-0.5)*60);
+                    babies.push(newBaby);
+                    createParticles(newBaby.x, newBaby.y, config.playerColor, 20);
+                    babyRespawnTimer = 0;
+                }
+            } else {
+                babyRespawnTimer = 0;
+            }
+
+            // Magnet logic: pull items towards player
+            if (player.magnetTime > 0) {
+                items.forEach(item => {
+                    const dx = player.x - item.x;
+                    const dy = player.y - item.y;
+                    const distSq = dx*dx + dy*dy;
+                    if (distSq < 90000) { // ~300px radius pull
+                        const dist = Math.sqrt(distSq);
+                        item.x += (dx / dist) * 0.4 * dt;
+                        item.y += (dy / dist) * 0.4 * dt;
+                    }
+                });
+            }
+
+            // Repel logic: push enemies away from player
+            if (player.repelTime > 0) {
+                enemies.forEach(e => {
+                    const dx = e.x - player.x;
+                    const dy = e.y - player.y;
+                    const distSq = dx*dx + dy*dy;
+                    if (distSq < 150 * 150 && distSq > 0) { 
+                        const dist = Math.sqrt(distSq);
+                        e.x += (dx / dist) * 0.3 * dt;
+                        e.y += (dy / dist) * 0.3 * dt;
+                    }
+                });
+            }
+
+            // Decrease hunger over time (starve in ~50 seconds without food, was 25)
+            hunger -= (dt / 1000) * 2;
+            updateHungerUI();
+            if (hunger <= 0) {
+                createParticles(player.x, player.y, "#999999", 30);
+                triggerShake(5, 400);
+                gameOver('starvation');
+                return;
+            }
+
+            // Babies smoothly heal health (20 HP per 2 minutes = 120000 ms)
+            if (health < MAX_HEALTH && health > 0 && babies.length > 0) {
+                health += (20 / 120000) * dt * babies.length;
+                if (health > MAX_HEALTH) health = MAX_HEALTH;
+                updateHealthUI();
+            }
+
+            // Progressive difficulty: Faster spawns and higher caps as score increases
+            let baseSpawnRate = Math.max(800, config.spawnRate - (score * 10)); // Caps at 800ms instead of 400ms
+            let currentSpawnRate = baseSpawnRate * diffSettings[currentDifficulty].spawnMult;
+
+            let baseMax = 3 + Math.floor(score / 20); // Starts at 3, grows much slower
+            let maxEnemies = Math.min(20, baseMax) * diffSettings[currentDifficulty].maxEnemyMult; // Hard cap reduced
+
+            if (time - lastSpawnTime > currentSpawnRate && enemies.length < maxEnemies) {
+                spawnEnemy(); lastSpawnTime = time;
+            }
+
+            if (items.length < 5 && Math.random() < 0.03) spawnItem();
+            
+            // Frequent Powerup spawn (max 3 on screen, 5x more likely to spawn)
+            if (powerups.length < 3 && Math.random() < 0.0025) spawnPowerUp();
+
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                let p = projectiles[i];
+                p.update(dt);
+                if (p.life <= 0 || p.x < 0 || p.x > width || p.y < 0 || p.y > height) { projectiles.splice(i, 1); continue; }
+
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    let e = enemies[j];
+                    const dx = p.x - e.x; const dy = p.y - e.y;
+                    if (dx*dx + dy*dy < (e.radius + p.radius)*(e.radius + p.radius)) {
+                        if (p.isPiercing && p.hitList.has(e)) continue;
+
+                        e.hp -= p.isPowered ? 2 : 1; 
+                        e.flashTimer = 100;
+                        if (p.isPiercing) p.hitList.add(e);
+
+                        createParticles(p.x, p.y, p.color, p.isPowered ? 10 : 5);
+                        Sound.play('hit');
+                        
+                        if (p.isExplosive) {
+                            createParticles(p.x, p.y, "#ef4444", 25);
+                            for (let k = enemies.length - 1; k >= 0; k--) {
+                                if (k === j) continue;
+                                let e2 = enemies[k];
+                                if ((p.x-e2.x)*(p.x-e2.x) + (p.y-e2.y)*(p.y-e2.y) < 14400) { // 120px explosion radius
+                                    e2.hp -= 2; e2.flashTimer = 100;
+                                }
+                            }
+                        }
+
+                        if (!p.isPiercing && !p.isExplosive) projectiles.splice(i, 1);
+                        else if (p.isExplosive && !p.isPiercing) projectiles.splice(i, 1);
+                        
+                        if (!p.isPiercing) break;
+                    }
+                }
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+                
+                let targetX = player.x; let targetY = player.y;
+                let foundTarget = false;
+                
+                if (decoys.length > 0) {
+                    targetX = decoys[0].x; targetY = decoys[0].y;
+                    foundTarget = true;
+                } else if (player.camoTime > 0) {
+                    targetX = e.x + (Math.random() - 0.5) * 50; 
+                    targetY = e.y + (Math.random() - 0.5) * 50;
+                }
+                
+                if (!foundTarget) {
+                    let minDistSq = (player.camoTime > 0) ? Infinity : (player.x - e.x)*(player.x - e.x) + (player.y - e.y)*(player.y - e.y);
+                    for (let b of babies) {
+                        let dSq = (b.x - e.x)*(b.x - e.x) + (b.y - e.y)*(b.y - e.y);
+                        if (dSq < minDistSq) {
+                            minDistSq = dSq; targetX = b.x; targetY = b.y;
+                        }
+                    }
+                }
+                
+                let speedMod = player.freezeTime > 0 ? 0.1 : 1.0;
+                e.update(dt * speedMod, targetX, targetY, enemies);
+
+                let enemyRemoved = false;
+                const dx = player.x - e.x; const dy = player.y - e.y;
+                
+                // Player Collision check (ignore if camo is active)
+                if (player.camoTime <= 0 && dx * dx + dy * dy < (player.radius + e.radius - 14) * (player.radius + e.radius - 14)) {
+                    if (player.invincibleTime > 0) {
+                        e.hp = 0; // crushed
+                    } else if (player.shieldActive) {
+                        player.shieldActive = false;
+                        createParticles(player.x, player.y, "#06b6d4", 30);
+                        e.hp = 0; // destroyed by popping shield
+                        triggerShake(6, 200);
+                    } else {
+                        health -= 15; // Reduced damage
+                        updateHealthUI();
+                        createParticles(player.x, player.y, "#ff0000", 20);
+                        triggerShake(8, 200);
+                        Sound.play('hit');
+                        
+                        e.hp = 0; // destroy enemy that hit you
+
+                        if (health <= 0) {
+                            createParticles(player.x, player.y, config.playerColor, 50);
+                            triggerShake(10, 300);
+                            gameOver('eaten');
+                            return;
+                        }
+                    }
+                }
+
+                // Baby Collision check
+                for (let j = babies.length - 1; j >= 0; j--) {
+                    let b = babies[j];
+                    const dxB = b.x - e.x; const dyB = b.y - e.y;
+                    const hitMargin = b.isAdult ? 0 : 8; // Adults are easier to hit (larger hitbox)
+                    if (dxB * dxB + dyB * dyB < (b.radius + e.radius - hitMargin) * (b.radius + e.radius - hitMargin)) {
+                        if (b.shieldActive) {
+                            b.shieldActive = false;
+                            createParticles(b.x, b.y, "#bae6fd", 30);
+                            e.hp = 0; // pop shield kills enemy
+                            triggerShake(4, 150);
+                            Sound.play('hit');
+                        } else {
+                            createParticles(b.x, b.y, "#ff0000", 30);
+                            babies.splice(j, 1);
+                            
+                            hunger = Math.max(0, hunger - 10);
+                            ammo = Math.floor(ammo * 0.5);
+                            updateHungerUI(); updateAmmoUI();
+                            triggerShake(10, 400);
+                            Sound.play('die');
+                            
+                            triggerPowerupUI(b.isAdult ? 'Adult Lost! Ammo Halved!' : 'Baby Lost! Ammo Halved!', 'powerup-text-nuke');
+                            player.instantPowerUpTime = 2000;
+                            
+                            if (!b.isAdult) {
+                                e.hp = 0; // destroy enemy that ate baby, but let it live if it ate an adult
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Centralized Enemy Death processing (for projectiles, poison, vortex, collisions)
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+                if (e.hp <= 0) {
+                    createParticles(e.x, e.y, config.enemyColor, 20);
+                    triggerShake(3, 100);
+                    enemies.splice(i, 1);
+                    score += 5; 
+                    Sound.play('die');
+                    document.getElementById('hud-score').innerText = score;
+                    const scoreEl = document.getElementById('hud-score');
+                    scoreEl.style.transform = "scale(1.5)";
+                    setTimeout(()=> scoreEl.style.transform = "scale(1)", 150);
+                }
+            }
+
+            for (let i = items.length - 1; i >= 0; i--) {
+                let item = items[i];
+                const dx = player.x - item.x; const dy = player.y - item.y;
+                if (dx * dx + dy * dy < (player.radius + item.radius) * (player.radius + item.radius)) {
+                    score += 10; 
+                    ammo = Math.min(MAX_AMMO, ammo + 200); 
+                    hunger = Math.min(MAX_HUNGER, hunger + 25);
+                    document.getElementById('hud-score').innerText = score;
+                    updateAmmoUI(); updateHungerUI(); Sound.play('collect');
+                    createParticles(item.x, item.y, config.itemColor, 12);
+                    items.splice(i, 1);
+                }
+            }
+            
+            for (let i = powerups.length - 1; i >= 0; i--) {
+                let p = powerups[i];
+                const dx = player.x - p.x; const dy = player.y - p.y;
+                if (dx * dx + dy * dy < (player.radius + p.radius) * (player.radius + p.radius)) {
+                    Sound.play('powerup');
+                    
+                    const pMult = 1.0 + (upgrades.powerup * 0.2);
+                    
+                    if (p.type === 'frenzy') { player.powerUpTime = 5000 * pMult; triggerPowerupUI('Frenzy Active!', 'powerup-text-frenzy'); } 
+                    else if (p.type === 'shield') { player.shieldActive = true; triggerPowerupUI('Shield Active!', 'powerup-text-shield'); } 
+                    else if (p.type === 'speed') { player.speedTime = 6000 * pMult; triggerPowerupUI('Speed Boost!', 'powerup-text-speed'); } 
+                    else if (p.type === 'magnet') { player.magnetTime = 8000 * pMult; triggerPowerupUI('Item Magnet!', 'powerup-text-magnet'); } 
+                    else if (p.type === 'freeze') { player.freezeTime = 5000 * pMult; triggerPowerupUI('Time Freeze!', 'powerup-text-freeze'); } 
+                    else if (p.type === 'clone') {
+                        let newBaby = new Baby(player.x + (Math.random()-0.5)*30, player.y + (Math.random()-0.5)*30);
+                        babies.push(newBaby); createParticles(newBaby.x, newBaby.y, config.playerColor, 20);
+                        triggerPowerupUI('Baby Cloned!', 'powerup-text-clone'); player.instantPowerUpTime = 2000;
+                    } 
+                    else if (p.type === 'invincible') { player.invincibleTime = 6000 * pMult; triggerPowerupUI('Invincible!', 'powerup-text-invincible'); } 
+                    else if (p.type === 'repel') { player.repelTime = 8000 * pMult; triggerPowerupUI('Repel Aura!', 'powerup-text-repel'); } 
+                    else if (p.type === 'feast') {
+                        health = MAX_HEALTH; hunger = MAX_HUNGER; ammo = MAX_AMMO;
+                        updateHealthUI(); updateHungerUI(); updateAmmoUI();
+                        triggerPowerupUI('Full Feast!', 'powerup-text-feast'); player.instantPowerUpTime = 2000;
+                    } 
+                    else if (p.type === 'nuke') {
+                        triggerPowerupUI('Nuke Deployed!', 'powerup-text-nuke'); player.instantPowerUpTime = 2000; Sound.play('nuke');
+                        triggerShake(15, 500);
+                        enemies.forEach(e => { createParticles(e.x, e.y, config.enemyColor, 15); score += 5; });
+                        enemies = []; document.getElementById('hud-score').innerText = score;
+                    }
+                    else if (p.type === 'pierce') { player.pierceTime = 8000 * pMult; triggerPowerupUI('Piercing Shots!', 'powerup-text-pierce'); }
+                    else if (p.type === 'camo') { player.camoTime = 8000 * pMult; triggerPowerupUI('Camouflage!', 'powerup-text-camo'); }
+                    else if (p.type === 'decoy') { decoys.push({x: player.x, y: player.y, life: 8000 * pMult}); triggerPowerupUI('Decoy Deployed!', 'powerup-text-decoy'); }
+                    else if (p.type === 'poison') { player.poisonTime = 8000 * pMult; triggerPowerupUI('Toxic Trail!', 'powerup-text-poison'); }
+                    else if (p.type === 'turret') { turrets.push({x: player.x, y: player.y, life: 10000 * pMult, cooldown: 0}); triggerPowerupUI('Turret Online!', 'powerup-text-turret'); }
+                    else if (p.type === 'jackpot') {
+                        for(let j=0; j<10; j++) {
+                            let angle = (j/10)*Math.PI*2;
+                            items.push(new Item(player.x + Math.cos(angle)*60, player.y + Math.sin(angle)*60));
+                        }
+                        triggerPowerupUI('Jackpot!', 'powerup-text-jackpot'); player.instantPowerUpTime = 2000;
+                    }
+                    else if (p.type === 'explosive') { player.explosiveTime = 8000 * pMult; triggerPowerupUI('Explosive Rounds!', 'powerup-text-explosive'); }
+                    else if (p.type === 'babyshield') { babies.forEach(b => b.shieldActive = true); triggerPowerupUI('Baby Shields!', 'powerup-text-babyshield'); player.instantPowerUpTime = 2000; }
+                    else if (p.type === 'vortex') { vortexes.push({x: player.x, y: player.y, life: 5000 * pMult}); triggerPowerupUI('Vortex Spawned!', 'powerup-text-vortex'); }
+                    else if (p.type === 'shrink') { player.shrinkTime = 8000 * pMult; triggerPowerupUI('Micro Size!', 'powerup-text-shrink'); }
+
+                    createParticles(p.x, p.y, p.color, 30);
+                    powerups.splice(i, 1);
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update(dt);
+                if (particles[i].life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function draw(time) {
+            ctx.drawImage(bgCanvas, 0, 0);
+
+            // Screen Shake
+            ctx.save();
+            if (shakeTime > 0) {
+                const mag = (shakeTime / 300) * shakeMagnitude;
+                const sx = (Math.random() - 0.5) * mag;
+                const sy = (Math.random() - 0.5) * mag;
+                ctx.translate(sx, sy);
+            }
+
+            // Draw new entities
+            poisonPuddles.forEach(p => {
+                ctx.fillStyle = "rgba(132, 204, 22, 0.4)";
+                ctx.beginPath(); ctx.arc(p.x, p.y, 40, 0, Math.PI*2); ctx.fill();
+            });
+            vortexes.forEach(v => {
+                ctx.save(); ctx.translate(v.x, v.y); ctx.rotate(time * 0.01);
+                ctx.fillStyle = "rgba(88, 28, 135, 0.6)";
+                ctx.beginPath();
+                for(let i=0; i<4; i++) ctx.ellipse(0, 0, 60, 15, i * Math.PI/2, 0, Math.PI*2);
+                ctx.fill(); ctx.restore();
+            });
+            decoys.forEach(d => {
+                ctx.fillStyle = "#ca8a04"; ctx.beginPath(); ctx.arc(d.x, d.y, 15, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle = "#a16207"; ctx.lineWidth = 3; ctx.stroke();
+            });
+            turrets.forEach(t => {
+                ctx.fillStyle = "#e879f9"; ctx.beginPath(); ctx.arc(t.x, t.y, 10, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle = "#d946ef"; ctx.lineWidth = 2; ctx.stroke();
+            });
+
+            items.forEach(item => item.draw(ctx, time));
+            powerups.forEach(p => p.draw(ctx, time));
+            particles.forEach(p => p.draw(ctx));
+            projectiles.forEach(p => p.draw(ctx));
+            babies.forEach(b => b.draw(ctx));
+
+            if (isPlaying) player.draw(ctx);
+            enemies.forEach(e => e.draw(ctx));
+
+            ctx.restore();
+        }
+
+        function gameLoop(time) {
+            const dt = time - lastTime;
+            lastTime = time;
+
+            if (shakeTime > 0) shakeTime -= dt;
+
+            if (dt < 100) { update(dt, time); draw(time); }
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        initLevelSelect();
+
+    </script>
+</body>
+</html>
